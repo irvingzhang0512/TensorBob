@@ -14,7 +14,12 @@ class BaseDataset:
         for dataset_config in dataset_configs:
             if not isinstance(dataset_config, dict):
                 raise ValueError('dataset_config must be dict instead of {}'.format(type(dataset_config)))
-            datasets.append(get_dataset_by_config(dataset_config, batch_size))
+            cur_dataset, cur_dataset_size = get_dataset_by_config(dataset_config, batch_size)
+            datasets.append(cur_dataset)
+            if self.size:
+                assert self.size == cur_dataset_size
+            else:
+                self.size = cur_dataset_size
         dataset = tf.data.Dataset.zip(tuple(datasets))
 
         if shuffle:

@@ -4,7 +4,9 @@
 ## 1. Base Class Info
 + BaseDataSet:
 
-## 2. ImageNet 2012
+## 2. Datasets
+
+### 2.1. ImageNet
 + META File：
     + ImageNet中包括low-level synsets（编号从1-1000）和high-level synsets（编号1000以上）
     + meta数据中包括：
@@ -26,6 +28,8 @@
         + 每张图片对应一个xml文件，其中包括图像定位数据。
     + ILSVRC2012_devkit_t12\data\ILSVRC2012_validation_ground_truth.txt：val set（图片分类标签）
 
+### 2.2. VOC2012
+http://blog.csdn.net/gzhermit/article/details/75729885
 
 # 图像增强
 

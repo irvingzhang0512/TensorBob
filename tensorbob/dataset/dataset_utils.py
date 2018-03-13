@@ -76,34 +76,58 @@ def _get_labels_dataset(dataset_config, batch_size):
 
 
 def get_dataset_by_config(dataset_config, batch_size):
+    """
+    通过config获取dataset以及dataset_size
+    :param dataset_config: 
+    :param batch_size: 
+    :return: dataset 和 dataset_size
+    """
+
     dataset_type = dataset_config['type']
 
     if dataset_type == 0:
         # 通过 file_path 获取 image
-        return _get_images_by_path_dataset(dataset_config, batch_size)
+        return _get_images_by_path_dataset(dataset_config, batch_size), len(dataset_config['src'])
     elif dataset_type == 1:
-        return _get_labels_dataset(dataset_config, batch_size)
+        return _get_labels_dataset(dataset_config, batch_size), len(dataset_config['src'])
     else:
         raise ValueError('unknown dataset type {}'.format(dataset_type))
 
 
 def get_image_by_path_dataset_config(file_paths, **kwargs):
+    """
+    通过file_paths获取图片
+    :param file_paths: 
+    :param kwargs:  image_width 
+                    image_height 
+                    norm_fn crop_width 
+                    crop_height 
+                    central_crop_flag 
+                    random_flip_horizontal_flag 
+                    random_flip_vertical_flag
+    :return: 
+    """
     dataset_config = {
         'type': 0,
         'src': file_paths,
-        'image_width': kwargs['image_width'] or 224,
-        'image_height': kwargs['image_height'] or 224,
-        'norm_fn': kwargs['norm_fn'],
-        'crop_width': kwargs['crop_width'] or 224,
-        'crop_height': kwargs['crop_height'] or 224,
-        'central_crop_flag': kwargs['central_crop_flag'] or True,
-        'random_flip_horizontal_flag': kwargs['random_flip_horizontal_flag'] or True,
-        'random_flip_vertical_flag': kwargs['random_flip_vertical_flag'] or True,
+        'image_width': kwargs.get('image_width') or 224,
+        'image_height': kwargs.get('image_height') or 224,
+        'norm_fn': kwargs.get('norm_fn'),
+        'crop_width': kwargs.get('crop_width') or 224,
+        'crop_height': kwargs.get('crop_height') or 224,
+        'central_crop_flag': kwargs.get('central_crop_flag') or True,
+        'random_flip_horizontal_flag': kwargs.get('random_flip_horizontal_flag') or True,
+        'random_flip_vertical_flag': kwargs.get('random_flip_vertical_flag') or True,
     }
     return dataset_config
 
 
 def get_labels_dataset_config(labels):
+    """
+    直接返回 labels
+    :param labels: 
+    :return: 
+    """
     dataset_config = {
         'type': 1,
         'src': labels
