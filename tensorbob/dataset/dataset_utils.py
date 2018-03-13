@@ -105,6 +105,9 @@ def get_image_by_path_dataset_config(file_paths, **kwargs):
                     central_crop_flag 
                     random_flip_horizontal_flag 
                     random_flip_vertical_flag
+                    {'image_width': 224, 'image_height': 224, 'norm_fn': None, 
+                    'crop_width': 224, 'crop_height': 224, 
+                    'central_crop_flag': True, 'random_flip_horizontal_flag': True, 'random_flip_vertical_flag': True} 
     :return: 
     """
     dataset_config = {

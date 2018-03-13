@@ -9,6 +9,7 @@ class BaseDataset:
         self.shuffle = shuffle
         self.shuffle_buffer_size = shuffle_buffer_size
         self.repeat = repeat
+        self.size = None
 
         datasets = []
         for dataset_config in dataset_configs:
