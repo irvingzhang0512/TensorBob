@@ -8,6 +8,6 @@ setup(
       author='ZhangYiYang',
       author_email='irvingzhang0512@gmail.com',
       url='https://github.com/irvingzhang0512/tensorbob',
-      packages=['tensorbob', 'tensorbob.nets', 'tensorbob.utils', 'tensorbob.dataset'],
+      packages=['tensorbob', 'tensorbob.utils', 'tensorbob.dataset'],
       install_requires=['tensorflow', 'numpy', 'scipy']
 )
