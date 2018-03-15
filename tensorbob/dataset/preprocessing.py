@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def inception_v3_norm(x):
+def norm_inception_v3(x):
     """
     将图片数值归一化到[-1, 1]之间
     :param x: 
@@ -13,15 +13,16 @@ def inception_v3_norm(x):
     return x
 
 
-def imagenet_norm(x):
+def norm_imagenet(x):
     """
     减去imagenet的平均数
     :param x: 
     :return: 
     """
-    x[..., 2] -= 103.939
-    x[..., 1] -= 116.779
-    x[..., 0] -= 123.68
+    x = x - [103.939, 116.779, 123.68]
+    # x[..., 2] -= 103.939
+    # x[..., 1] -= 116.779
+    # x[..., 0] -= 123.68
     return x
 
 

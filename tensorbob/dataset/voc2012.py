@@ -21,6 +21,11 @@ SEGMENTATION_COLOR_MAP = [[128, 0, 0], [0, 128, 0], [128, 128, 0], [0, 0, 128],
 
 
 def _get_classification_paths_and_labels(mode='trainval'):
+    """
+    根据 mode 获取对应的 file_paths 和 labels
+    :param mode:
+    :return:
+    """
     if mode not in ['train', 'val', 'trainval']:
         raise ValueError('Unknown mode: {}'.format(mode))
 
@@ -46,9 +51,16 @@ def _get_classification_paths_and_labels(mode='trainval'):
 
 
 def get_voc_classification_dataset(mode='train', batch_size=32, **kwargs):
+    """
+    获取voc classification的 dataset
+    :param mode: 指定模式，train val trainval 三选一
+    :param batch_size:
+    :param kwargs:
+    :return:
+    """
     paths, labels = _get_classification_paths_and_labels(mode)
     images_config = get_image_by_path_dataset_config(paths, **kwargs)
     labels_config = get_labels_dataset_config(labels)
     dataset_configs = [images_config, labels_config]
     train_mode = True if mode == 'train' else False
-    return BaseDataset(dataset_configs, batch_size, repeat=train_mode, shuffle=train_mode, shuffle_buffer_size=1000)
+    return BaseDataset(dataset_configs, batch_size, repeat=True, shuffle=train_mode, shuffle_buffer_size=1000)
