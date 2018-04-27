@@ -2,3 +2,6 @@
 logs/
 .idea/
 __pycache__/
+build/
+dist/
+tensorbob.egg-info/

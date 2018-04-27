@@ -58,7 +58,7 @@ def _get_images_paths_and_labels(mode='train'):
 
 def get_imagenet_classification_dataset(mode, batch_size, **kwargs):
     paths, labels = _get_images_paths_and_labels(mode)
-    images_config = get_image_by_path_dataset_config(mode, **kwargs)
+    images_config = get_image_by_path_dataset_config(paths, **kwargs)
     labels_config = get_labels_dataset_config(labels)
     dataset_config = [images_config, labels_config]
     train_mode = True if mode == 'train' else False
