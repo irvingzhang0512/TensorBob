@@ -1,11 +1,11 @@
 # 数据集中文介绍：
 
 import os
-from .dataset_utils import get_image_by_path_dataset_config, get_labels_dataset_config
+from .dataset_utils import get_images_path_dataset_config, get_classification_labels_dataset_config
 from .base_dataset import BaseDataset
 
 # VOC2012_ROOT_DIR = "D:\\PycharmProjects\\data\\VOCdevkit\\VOC2012"
-VOC2012_ROOT_DIR = "/home/ubuntu/data/voc/VOCdevkit/VOC2012"
+VOC2012_ROOT_DIR = "/home/ubuntu/data/VOC2012/train/VOC2012"
 IMAGES_DIR = os.path.join(VOC2012_ROOT_DIR, 'JPEGImages')
 CLASSIFICATION_CONFIG_DIR = os.path.join(VOC2012_ROOT_DIR, 'ImageSets', 'Main')
 
@@ -50,17 +50,18 @@ def _get_classification_paths_and_labels(mode='trainval'):
     return keys, values
 
 
-def get_voc_classification_dataset(mode='train', batch_size=32, **kwargs):
+def get_voc_classification_dataset(mode='train', batch_size=32, epochs=1, **kwargs):
     """
     获取voc classification的 dataset
+    :param epochs: 重复次数
     :param mode: 指定模式，train val trainval 三选一
     :param batch_size:
     :param kwargs:
     :return:
     """
     paths, labels = _get_classification_paths_and_labels(mode)
-    images_config = get_image_by_path_dataset_config(paths, **kwargs)
-    labels_config = get_labels_dataset_config(labels)
+    images_config = get_images_path_dataset_config(paths, **kwargs)
+    labels_config = get_classification_labels_dataset_config(labels)
     dataset_configs = [images_config, labels_config]
     train_mode = True if mode == 'train' else False
-    return BaseDataset(dataset_configs, batch_size, repeat=True, shuffle=train_mode, shuffle_buffer_size=1000)
+    return BaseDataset(dataset_configs, batch_size, repeat=epochs, shuffle=train_mode)

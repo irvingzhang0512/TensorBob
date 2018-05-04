@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import scipy.io
-from .dataset_utils import get_image_by_path_dataset_config, get_labels_dataset_config
+from .dataset_utils import get_images_path_dataset_config, get_classification_labels_dataset_config
 from .base_dataset import BaseDataset
 
 DATA_PATH = "/home/tensorflow05/data/ILSVRC2012"
@@ -58,8 +58,8 @@ def _get_images_paths_and_labels(mode='train'):
 
 def get_imagenet_classification_dataset(mode, batch_size, **kwargs):
     paths, labels = _get_images_paths_and_labels(mode)
-    images_config = get_image_by_path_dataset_config(paths, **kwargs)
-    labels_config = get_labels_dataset_config(labels)
+    images_config = get_images_path_dataset_config(paths, **kwargs)
+    labels_config = get_classification_labels_dataset_config(labels)
     dataset_config = [images_config, labels_config]
     train_mode = True if mode == 'train' else False
     return BaseDataset(dataset_config,

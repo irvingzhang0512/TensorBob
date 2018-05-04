@@ -13,17 +13,17 @@ def norm_inception_v3(x):
     return x
 
 
-def norm_imagenet(x):
+def norm_imagenet(image):
     """
     减去imagenet的平均数
-    :param x: 
+    :param image:
     :return: 
     """
-    x = x - [103.939, 116.779, 123.68]
-    # x[..., 2] -= 103.939
-    # x[..., 1] -= 116.779
-    # x[..., 0] -= 123.68
-    return x
+    means = [103.939, 116.779, 123.68]
+    channels = tf.split(axis=2, num_or_size_splits=3, value=image)
+    for i in range(3):
+        channels[i] -= means[i]
+    return tf.concat(axis=2, values=channels)
 
 
 def crop(images, offset_height, offset_width, target_height, target_width):
