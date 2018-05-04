@@ -48,6 +48,7 @@ class BaseDataset:
         dataset = tf.data.Dataset.zip(tuple(datasets))
         if repeat > 1:
             dataset = dataset.repeat(repeat)
+            self.size = self.size * repeat
         if shuffle:
             if shuffle_buffer_size is None:
                 shuffle_buffer_size = self.size
