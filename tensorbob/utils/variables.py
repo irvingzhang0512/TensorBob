@@ -1,4 +1,29 @@
 from tensorflow.contrib.framework.python.ops.variables import *
 from tensorflow.python.training.training_util import *
 
-
+__all__ = ['add_model_variable',
+           'assert_global_step',
+           'assert_or_get_global_step',
+           'assign_from_checkpoint',
+           'assign_from_checkpoint_fn',
+           'assign_from_values',
+           'assign_from_values_fn',
+           'create_global_step',
+           'filter_variables',
+           'get_global_step',
+           'get_or_create_global_step',
+           'get_local_variables',
+           'get_model_variables',
+           'get_trainable_variables',
+           'get_unique_variable',
+           'get_variables_by_name',
+           'get_variables_by_suffix',
+           'get_variable_full_name',
+           'get_variables_to_restore',
+           'get_variables',
+           'global_variable',
+           'local_variable',
+           'model_variable',
+           'variable',
+           'VariableDeviceChooser',
+           'zero_initializer']
