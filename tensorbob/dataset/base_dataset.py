@@ -13,7 +13,7 @@ class BaseDataset:
                  batch_size=32,
                  shuffle=False,
                  shuffle_buffer_size=None,
-                 repeat=1,
+                 repeat=False,
                  prefetch_buffer_size=None
                  ):
         """
@@ -46,9 +46,6 @@ class BaseDataset:
 
         # dataset 操作
         dataset = tf.data.Dataset.zip(tuple(datasets))
-        if repeat > 1:
-            dataset = dataset.repeat(repeat)
-            self.size = self.size * repeat
         if shuffle:
             if shuffle_buffer_size is None:
                 shuffle_buffer_size = self.size
@@ -71,10 +68,12 @@ class BaseDataset:
         """
         if not self._iterator_init_flag:
             self.reset(sess, feed_dict)
-            self._iterator_init_flag = True
         try:
             return sess.run(self._next_batch)
         except OutOfRangeError:
+            if self._repeat:
+                sess.run(self._iterator.initializer, feed_dict=feed_dict)
+                return sess.run(self._next_batch)
             raise
 
     def reset(self, sess, feed_dict=None):
