@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.training.basic_session_run_hooks import *
 from tensorflow.python.framework.errors_impl import OutOfRangeError
+from tensorflow.python.platform import tf_logging as logging
 
 __all__ = ['SecondOrStepTimer',
            'LoggingTensorHook',
@@ -81,26 +82,30 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
         # 每多少次在验证集上评估一次模型性能
         self._evaluate_every_n_steps = evaluate_every_n_steps
 
-        self._best_metric = 0
+        # 验证集上的最优性能指标记录
+        self._best_val_metric = tf.get_variable('best_val_metric', [], tf.float32)
+        self._ph_best_val_metric = tf.placeholder(tf.float32, [])
+        self._assign_best_val_metric_op = tf.assign(self._best_val_metric, self._ph_best_val_metric)
 
     def after_run(self,
                   run_context,
                   run_values):
         sess = run_context.session
-        cur_global_step = sess.run(tf.train.get_or_create_global_step())
+        cur_global_step, best_val_metric = sess.run([tf.train.get_or_create_global_step(), self._best_val_metric])
+
         if cur_global_step != 0 and cur_global_step % self._evaluate_every_n_steps == 0:
-            print('{}/{}'.format(cur_global_step, self._evaluate_every_n_steps))
             cur_metric = self._evaluate_fn(sess,
                                            self._dataset)
-
             if self._summary_op is not None and self._summary_writer is not None:
                 summary_string = sess.run(self._summary_op)
                 self._summary_writer.add_summary(summary_string, cur_global_step)
 
-            if cur_metric > self._best_metric:
-                self._best_metric = cur_global_step
+            if cur_metric > best_val_metric:
+                sess.run(self._assign_best_val_metric_op, feed_dict={self._ph_best_val_metric: cur_metric})
                 if self._saver:
-                    self._saver.save(self._saver_file_prefix, global_step=cur_global_step)
+                    saver_path = self._saver.save(sess, self._saver_file_prefix, global_step=cur_global_step)
+                    logging.debug('saving model into {}'.format(saver_path))
+            logging.debug('best val metrics is %.4f' % cur_metric)
 
 
 def evaluate_on_single_scale(scale,
@@ -108,22 +113,25 @@ def evaluate_on_single_scale(scale,
                              ph_images,
                              ph_labels,
                              ph_val_image_size,
-                             ph_is_training):
+                             ph_is_training,
+                             metrics_reset_ops,
+                             metrics_update_ops,
+                             main_metric):
     def evaluate_fn(sess, dataset):
         print('evaluate val set...')
         dataset.reset(sess, feed_dict={ph_val_image_size: scale})
-        sess.run(tf.get_collection('val_metrics_reset_ops'))
+        sess.run(metrics_reset_ops)
         while True:
             try:
                 cur_images, cur_labels = dataset.get_next_batch(sess)
-                sess.run(tf.get_collection('val_metrics_update_ops'),
+                sess.run(metrics_update_ops,
                          feed_dict={ph_images: cur_images,
                                     ph_labels: cur_labels,
                                     ph_image_size: scale,
                                     ph_is_training: False})
             except OutOfRangeError:
                 break
-        return sess.run(tf.get_collection('val_metrics')[0])
+        return sess.run(main_metric)
 
     return evaluate_fn
 
