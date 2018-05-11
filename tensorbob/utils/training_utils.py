@@ -48,7 +48,6 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
     def __init__(self,
                  dataset,
                  evaluate_every_n_steps,
-                 saver=None,
                  saver_file_prefix=None,
                  summary_op=None,
                  summary_writer=None,
@@ -59,8 +58,6 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
             raise ValueError('evaluate_fn cannot be None!')
         if evaluate_every_n_steps is None:
             raise ValueError('evaluate_every_n_steps cannot be None!')
-        if saver is not None and saver_file_prefix is None:
-            raise ValueError('saver_file_prefix cannot be None when saver is not None!')
         if summary_op is not None and summary_writer is None:
             raise ValueError('summary_writer cannot be None when summary_op is not None!')
 
@@ -70,10 +67,6 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
         # 评估模型性能的函数
         # 要求有两个输入，分别是(sess, dataset)
         self._evaluate_fn = evaluate_fn
-
-        # 保存验证集上性能最好的模型
-        self._saver = saver
-        self._saver_file_prefix = saver_file_prefix
 
         # summary验证集上的metrics
         self._summary_op = summary_op
@@ -86,6 +79,11 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
         self._best_val_metric = tf.get_variable('best_val_metric', [], tf.float32)
         self._ph_best_val_metric = tf.placeholder(tf.float32, [])
         self._assign_best_val_metric_op = tf.assign(self._best_val_metric, self._ph_best_val_metric)
+
+        # 保存验证集上性能最好的模型
+        self._saver_file_prefix = saver_file_prefix
+        if saver_file_prefix is not None:
+            self._saver = tf.train.Saver(max_to_keep=2)
 
     def after_run(self,
                   run_context,
