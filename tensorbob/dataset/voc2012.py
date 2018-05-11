@@ -50,7 +50,7 @@ def _get_classification_paths_and_labels(mode='trainval'):
     return keys, values
 
 
-def get_voc_classification_dataset(mode='train', batch_size=32, epochs=1, **kwargs):
+def get_voc_classification_dataset(mode='train', batch_size=32, **kwargs):
     """
     获取voc classification的 dataset
     :param epochs: 重复次数
@@ -63,5 +63,5 @@ def get_voc_classification_dataset(mode='train', batch_size=32, epochs=1, **kwar
     images_config = get_images_path_dataset_config(paths, **kwargs)
     labels_config = get_classification_labels_dataset_config(labels)
     dataset_configs = [images_config, labels_config]
-    train_mode = True if mode == 'train' else False
-    return BaseDataset(dataset_configs, batch_size, repeat=epochs, shuffle=train_mode)
+    train_mode = (mode == 'train')
+    return BaseDataset(dataset_configs, batch_size, repeat=train_mode, shuffle=train_mode)
