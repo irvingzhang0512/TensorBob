@@ -25,34 +25,32 @@ class TrainDatasetFeedDictHook(tf.train.SessionRunHook):
     要求 BaseDataset 实例必须一次返回两个
     """
 
-    def __init__(self, dataset, ph_images, ph_labels, ph_image_size, ph_is_training,
-                 # collection_name='val_metrics_update_ops'
-                 ):
+    def __init__(self, dataset,
+                 ph_images,
+                 ph_labels):
         self._dataset = dataset
-        self._ph_images = ph_images
-        self._ph_labesl = ph_labels
-        self._ph_image_size = ph_image_size
-        self._ph_is_training = ph_is_training
-        # self._collection_name = collection_name
-        self._feed_dict = None
+        self._ph_x = ph_images
+        self._ph_y = ph_labels
 
     def before_run(self, run_context):
         sess = run_context.session
         cur_images, cur_labels = self._dataset.get_next_batch(sess)
-        self._feed_dict = {
-            self._ph_images: cur_images, self._ph_labesl: cur_labels,
-            self._ph_is_training: True, self._ph_image_size: 224
-        }
         return tf.train.SessionRunArgs(
-            fetches=None, feed_dict=self._feed_dict
+            fetches=None, feed_dict={
+                self._ph_x: cur_images,
+                self._ph_y: cur_labels
+            }
         )
 
 
 class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
     def __init__(self,
-                 dataset, evaluate_every_n_steps,
-                 saver=None, saver_file_prefix=None,
-                 summary_op=None, summary_writer=None,
+                 dataset,
+                 evaluate_every_n_steps,
+                 saver=None,
+                 saver_file_prefix=None,
+                 summary_op=None,
+                 summary_writer=None,
                  evaluate_fn=None):
         if dataset is None:
             raise ValueError('dataset cannot be None!')

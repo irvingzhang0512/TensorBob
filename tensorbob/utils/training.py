@@ -10,12 +10,12 @@ def create_finetune_train_op(train_op_stage_one, train_op_stage_two, stage_one_s
     if global_step is None:
         global_step = tf.train.get_or_create_global_step()
     return tf.cond(tf.less_equal(global_step, stage_one_steps),
-                   train_op_stage_one,
-                   train_op_stage_two)
+                   lambda: train_op_stage_one,
+                   lambda: train_op_stage_two)
 
 
 def train(train_op,
-          log_dir,
+          log_dir,  # 要导入的ckpt文件路径
           scaffold=None,
           hooks=None):
     scaffold = scaffold or tf.train.Scaffold()
@@ -23,3 +23,5 @@ def train(train_op,
     with tf.train.SingularMonitoredSession(hooks=hooks, scaffold=scaffold, checkpoint_dir=log_dir) as sess:
         while not sess.should_stop():
             sess.run(train_op)
+
+
