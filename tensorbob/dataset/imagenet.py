@@ -16,12 +16,12 @@ META_FILE_NAME = "meta.mat"
 VAL_LABEL_FILE_NAME = "ILSVRC2012_validation_ground_truth.txt"
 
 
-def _load_mata_data():
+def _load_mata_data(data_path):
     """
     从META File中读取分类id与分类细节
     :return: 分类id，分类细节
     """
-    meta_file = os.path.join(DATA_PATH, DEVKIT_DIR, META_FILE_NAME)
+    meta_file = os.path.join(data_path, DEVKIT_DIR, META_FILE_NAME)
     meta_data = scipy.io.loadmat(meta_file, struct_as_record=False)
     synsets = np.squeeze(meta_data['synsets'])
     wnids = np.squeeze(np.array([s.WNID for s in synsets]))
@@ -29,8 +29,8 @@ def _load_mata_data():
     return wnids, words
 
 
-def _get_images_paths_and_labels(mode='train'):
-    wnids, words = _load_mata_data()
+def _get_images_paths_and_labels(mode, data_path):
+    wnids, words = _load_mata_data(data_path)
     paths = []
     labels = []
     if mode == 'train':
@@ -56,11 +56,19 @@ def _get_images_paths_and_labels(mode='train'):
     return paths, labels
 
 
-def get_imagenet_classification_dataset(mode, batch_size, **kwargs):
-    paths, labels = _get_images_paths_and_labels(mode)
+def get_imagenet_classification_dataset(mode,
+                                        batch_size,
+                                        data_path=DATA_PATH,
+                                        shuffle_buffer_size=10000,
+                                        prefetch_buffer_size=10000,
+                                        **kwargs):
+    paths, labels = _get_images_paths_and_labels(mode, data_path)
     images_config = get_images_path_dataset_config(paths, **kwargs)
     labels_config = get_classification_labels_dataset_config(labels)
     dataset_config = [images_config, labels_config]
     train_mode = True if mode == 'train' else False
     return BaseDataset(dataset_config,
-                       batch_size=batch_size, shuffle=train_mode, shuffle_buffer_size=10000, repeat=train_mode)
+                       batch_size=batch_size,
+                       shuffle=train_mode, shuffle_buffer_size=shuffle_buffer_size,
+                       repeat=train_mode,
+                       prefetch_buffer_size=prefetch_buffer_size)
