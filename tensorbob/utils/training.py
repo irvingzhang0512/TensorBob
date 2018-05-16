@@ -72,7 +72,7 @@ def train(train_op,
     if logging_tensors is not None and logging_every_n_steps is not None:
         if logging_every_n_steps < 0:
             raise ValueError('logging_every_n_steps must be positive but get {}'.format(logging_every_n_steps))
-        all_hooks.append(LoggingTensorHook(logging_every_n_steps, logging_every_n_steps))
+        all_hooks.append(LoggingTensorHook(logging_tensors, logging_every_n_steps))
 
     # feed_dict generator
     if feed_fn is not None:
@@ -98,7 +98,7 @@ def train(train_op,
                                              ))
 
     if hooks:
-        all_hooks.append(hooks)
+        all_hooks += hooks
     with tf.train.SingularMonitoredSession(hooks=all_hooks, scaffold=scaffold, checkpoint_dir=log_dir) as sess:
         while not sess.should_stop():
             sess.run(train_op)

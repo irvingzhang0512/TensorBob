@@ -104,7 +104,9 @@ def _get_images_path_dataset(dataset_config):
 
     def _cur_parse_image_fn(image_path):
         img_file = tf.read_file(image_path)
-        cur_image = tf.image.decode_jpeg(img_file)
+        # 由于以下issue所描述的问题，不能使用decode_image，而要使用decode_jpeg
+        # https://github.com/tensorflow/tensorflow/issues/14226
+        cur_image = tf.image.decode_jpeg(img_file, channels=3)
 
         # resize
         if image_width is not None and image_height is not None:

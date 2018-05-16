@@ -62,11 +62,11 @@ def _get_images_paths_and_labels(mode, data_path):
         with open(os.path.join(data_path, DEVKIT_DIR, VAL_LABEL_FILE_NAME)) as f:
             ground_truths = f.readlines()
         ground_truths = [int(label.strip()) for label in ground_truths]
-        images = sorted(os.listdir(os.path.join(DATA_PATH, IMAGE_DIRS[mode])))
+        images = sorted(os.listdir(os.path.join(data_path, IMAGE_DIRS[mode])))
         for image, label in zip(images, ground_truths):
             if image in BROKEN_IMAGE_VAL:
                 continue
-            paths.append(image)
+            paths.append(os.path.join(data_path, IMAGE_DIRS[mode], image))
             labels.append(label)
     return paths, labels
 
