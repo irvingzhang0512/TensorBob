@@ -14,6 +14,17 @@ LABEL_DIRS = {"train": "ILSVRC2012_bbox_train",
 DEVKIT_DIR = "ILSVRC2012_devkit_t12/data"
 META_FILE_NAME = "meta.mat"
 VAL_LABEL_FILE_NAME = "ILSVRC2012_validation_ground_truth.txt"
+BROKEN_IMAGES_TRAIN = ['n02494079_12155.JPEG',
+                       'n04501370_19125.JPEG',
+                       'n04501370_2480.JPEG',
+                       'n04501370_16347.JPEG',
+                       'n04501370_3775.JPEG',
+                       'n04505470_5018.JPEG',
+                       'n04505470_7109.JPEG',
+                       'n09246464_51105.JPEG',
+                       'n09256479_9451.JPEG'
+                       ]
+BROKEN_IMAGE_VAL = []
 
 
 def _load_mata_data(data_path):
@@ -37,20 +48,24 @@ def _get_images_paths_and_labels(mode, data_path):
         for i, wnid in enumerate(wnids):
             if i >= 1000:
                 break
-            images = os.listdir(os.path.join(DATA_PATH, IMAGE_DIRS[mode], wnid))
+            images = os.listdir(os.path.join(data_path, IMAGE_DIRS[mode], wnid))
             for image in images:
-                paths.append(os.path.join(DATA_PATH, IMAGE_DIRS[mode], wnid, image))
+                if image in BROKEN_IMAGES_TRAIN:
+                    continue
+                paths.append(os.path.join(data_path, IMAGE_DIRS[mode], wnid, image))
                 labels.append(i)
         ids = np.arange(0, len(labels))
         np.random.shuffle(ids)
         paths = np.array(paths)[ids]
         labels = np.array(labels)[ids]
     elif mode == 'val':
-        with open(os.path.join(DATA_PATH, DEVKIT_DIR, VAL_LABEL_FILE_NAME)) as f:
+        with open(os.path.join(data_path, DEVKIT_DIR, VAL_LABEL_FILE_NAME)) as f:
             ground_truths = f.readlines()
         ground_truths = [int(label.strip()) for label in ground_truths]
         images = sorted(os.listdir(os.path.join(DATA_PATH, IMAGE_DIRS[mode])))
         for image, label in zip(images, ground_truths):
+            if image in BROKEN_IMAGE_VAL:
+                continue
             paths.append(image)
             labels.append(label)
     return paths, labels

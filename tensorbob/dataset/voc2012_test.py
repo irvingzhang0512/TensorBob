@@ -18,7 +18,7 @@ class Voc2012Test(unittest.TestCase):
             'random_flip_vertical_flag': True,
             'multi_scale_training_list': [256, 512],
         }
-        dataset = get_voc_classification_dataset('train', 32, 10, **dataset_config)
+        dataset = get_voc_classification_dataset('train', 32, **dataset_config)
         with tf.Session() as sess:
             total_cnt = 0
             while True:
@@ -41,7 +41,7 @@ class Voc2012Test(unittest.TestCase):
             'image_width': ph_image_size,
             'image_height': ph_image_size
         }
-        dataset = get_voc_classification_dataset('val', 32, 1, **dataset_config)
+        dataset = get_voc_classification_dataset('val', 32, **dataset_config)
         for multi_scale in multi_scales:
             with tf.Session() as sess:
                 total_cnt = 0
