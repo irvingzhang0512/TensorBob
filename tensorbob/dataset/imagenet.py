@@ -14,15 +14,25 @@ LABEL_DIRS = {"train": "ILSVRC2012_bbox_train",
 DEVKIT_DIR = "ILSVRC2012_devkit_t12/data"
 META_FILE_NAME = "meta.mat"
 VAL_LABEL_FILE_NAME = "ILSVRC2012_validation_ground_truth.txt"
-BROKEN_IMAGES_TRAIN = ['n02494079_12155.JPEG',
-                       'n04501370_19125.JPEG',
-                       'n04501370_2480.JPEG',
-                       'n04501370_16347.JPEG',
-                       'n04501370_3775.JPEG',
-                       'n04505470_5018.JPEG',
-                       'n04505470_7109.JPEG',
+BROKEN_IMAGES_TRAIN = ['n02667093_4388.JPEG',
                        'n09246464_51105.JPEG',
-                       'n09256479_9451.JPEG'
+                       'n04501370_2480.JPEG',
+                       'n04501370_19125.JPEG',
+                       'n04501370_16347.JPE',
+                       'n04501370_3775.JPEG',
+                       'n02690373_15966.JPEG',
+                       'n02494079_12155.JPEG',
+                       'n04522168_538.JPEG',
+                       'n02514041_1625.JPEG',
+                       'n02514041_15019.JPEG',
+                       'n07714571_1691.JPEG',
+                       'n02640242_29608.JPEG',
+                       'n04505470_7109.JPEG',
+                       'n04505470_5018.JPEG',
+                       'n09256479_9451.JPEG',
+                       'n01770393_6999.JPEG',
+                       'n09256479_1094.JPEG',
+                       'n09256479_108.JPEG',
                        ]
 BROKEN_IMAGE_VAL = []
 
