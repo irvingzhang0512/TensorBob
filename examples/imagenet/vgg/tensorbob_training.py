@@ -26,7 +26,7 @@ parser.add_argument('--DECAY_STEPS', help='学习率衰减steps数量', type=int
 parser.add_argument('--STAIRCASE', help='学习率衰减steps数量', type=bool, default=False)
 
 # 路径
-parser.add_argument('--LOGS_DIR', help='保存训练过程中，ckpt的路径', type=str, default='./logs/')
+parser.add_argument('--LOGS_DIR', help='保存训练过程中，ckpt的路径', type=str, default='./logs/ckpt/')
 parser.add_argument('--CKPT_FILE_PATH', help='验证集中性能最好的模型路径', type=str, default='./logs/best-val/model.ckpt')
 parser.add_argument('--TRAIN_LOGS_DIR', help='训练过程中summary路径', type=str, default='./logs/train/')
 parser.add_argument('--VAL_LOGS_DIR', help='验证过程中summary路径', type=str, default='./logs/val/')
@@ -156,10 +156,15 @@ def main():
 
     # hooks
     train_dataset_hook = bob.training_utils.TrainDatasetFeedDictHook(train_dataset, ph_x, ph_y)
+    evaluate_feed_dict = {
+        ph_image_size: args.VAL_SINGLE_IMAGE_SIZE,
+        ph_is_training: False,
+    }
+
     evaluate_fn = bob.training_utils.evaluate_on_single_scale(args.VAL_SINGLE_IMAGE_SIZE,
-                                                              ph_image_size, ph_x, ph_y,
+                                                              ph_x, ph_y,
+                                                              evaluate_feed_dict,
                                                               None,
-                                                              ph_is_training,
                                                               tf.get_collection(args.METRICS_RESET_OPS_COLLECTION),
                                                               tf.get_collection(args.METRICS_UPDATE_OPS_COLLECTION),
                                                               main_metric=main_metric)
