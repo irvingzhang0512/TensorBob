@@ -51,7 +51,8 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
                  saver_file_prefix=None,
                  summary_op=None, summary_writer=None,
                  evaluate_fn=None,
-                 best_metric_var_name='best_val_metric'):
+                 best_metric_var_name='best_val_metric',
+                 summary_feed_dict=None):
         if dataset is None:
             raise ValueError('dataset cannot be None!')
         if evaluate_fn is None:
@@ -60,6 +61,8 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
             raise ValueError('evaluate_every_n_steps cannot be None!')
         if summary_op is not None and summary_writer is None:
             raise ValueError('summary_writer cannot be None when summary_op is not None!')
+
+        self._summary_feed_dict = summary_feed_dict
 
         # 在验证集上测试模型性能
         self._dataset = dataset
@@ -95,7 +98,7 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
             cur_metric = self._evaluate_fn(sess,
                                            self._dataset)
             if self._summary_op is not None and self._summary_writer is not None:
-                summary_string = sess.run(self._summary_op)
+                summary_string = sess.run(self._summary_op, feed_dict=self._summary_feed_dict)
                 self._summary_writer.add_summary(summary_string, cur_global_step)
 
             if cur_metric > best_val_metric:
@@ -107,11 +110,10 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
 
 
 def evaluate_on_single_scale(scale,
-                             ph_image_size,
                              ph_images,
                              ph_labels,
+                             feed_dict,
                              ph_val_image_size,
-                             ph_is_training,
                              metrics_reset_ops,
                              metrics_update_ops,
                              main_metric):
@@ -119,24 +121,23 @@ def evaluate_on_single_scale(scale,
         raise ValueError('scale must be positive int')
 
     def evaluate_fn(sess, dataset):
+        if feed_dict is None:
+            raise ValueError('feed_dict must not be None')
         print('evaluate val set...')
         if ph_val_image_size is not None:
-            feed_dict = {ph_val_image_size: scale}
+            val_feed_dict = {ph_val_image_size: scale}
         else:
-            feed_dict = None
-        dataset.reset(sess, feed_dict=feed_dict)
+            val_feed_dict = None
+        dataset.reset(sess, feed_dict=val_feed_dict)
         sess.run(metrics_reset_ops)
         while True:
             try:
                 cur_images, cur_labels = dataset.get_next_batch(sess)
-                sess.run(metrics_update_ops,
-                         feed_dict={ph_images: cur_images,
-                                    ph_labels: cur_labels,
-                                    ph_image_size: scale,
-                                    ph_is_training: False})
+                feed_dict[ph_images] = cur_images
+                feed_dict[ph_labels] = cur_labels
+                sess.run(metrics_update_ops, feed_dict=feed_dict)
             except OutOfRangeError:
                 break
-        return sess.run(main_metric)
+        return sess.run(main_metric, feed_dict=feed_dict)
 
     return evaluate_fn
-
