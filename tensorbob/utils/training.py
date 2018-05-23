@@ -89,6 +89,8 @@ def train(train_op,
 
     # save
     if save_every_n_steps is not None:
+        if saver is None:
+            saver = tf.train.Saver(max_to_keep=5)
         if save_every_n_steps < 0:
             raise ValueError('save_every_n_steps must be positive but get {}'.format(save_every_n_steps))
         all_hooks.append(CheckpointSaverHook(log_dir,
