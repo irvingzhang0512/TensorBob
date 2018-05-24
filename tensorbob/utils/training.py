@@ -82,6 +82,8 @@ def train(train_op,
     if summary_every_n_steps is not None:
         if summary_every_n_steps < 0:
             raise ValueError('summary_every_n_steps must be positive but get {}'.format(summary_every_n_steps))
+        if summary_op is None:
+            summary_op = tf.summary.merge_all()
         all_hooks.append(SummarySaverHook(save_steps=summary_every_n_steps,
                                           output_dir=log_dir,
                                           summary_writer=summary_writer,
