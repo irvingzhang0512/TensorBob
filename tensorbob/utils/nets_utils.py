@@ -23,7 +23,7 @@ def vgg_model(vgg_type=16, **kwargs):
     weight_decay = kwargs.pop('weight_decay')
     if weight_decay is None:
         weight_decay = 0.0005
-    with vgg.vgg_arg_scope(weight_decay=weight_decay):
+    with slim.arg_scope(vgg.vgg_arg_scope(weight_decay=weight_decay)):
         return vgg_type_dict[vgg_type](**kwargs)
 
 
