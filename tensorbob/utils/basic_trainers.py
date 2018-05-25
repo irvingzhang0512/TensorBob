@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from .trainer import Trainer
-from .training import create_train_op
+from .training import create_train_op, create_finetune_train_op
 from .training_utils import TrainDatasetFeedDictHook, evaluate_on_single_scale, ValidationDatasetEvaluationHook
 from tensorbob.dataset.imagenet import get_imagenet_classification_dataset
 from tensorbob.dataset.preprocessing import norm_imagenet
@@ -11,11 +11,46 @@ __all__ = ['BaseClassificationTrainer', 'ImageNetClassificationTrainer']
 
 
 class BaseClassificationTrainer(Trainer):
-    def __init__(self, num_classes=1000, training_crop_size=224, val_crop_size=384, **kwargs):
+    def __init__(self, num_classes=1000,
+                 training_crop_size=224, val_crop_size=384,
+                 fine_tune_steps=None, fine_tune_var_list=None,
+                 **kwargs):
+        # {
+        #     'num_classes': 1000,
+        #     'training_crop_size': 224,
+        #     'val_crop_size': 384,
+        #     'fine_tune_steps': None,
+        #     'fine_tune_var_list': None,
+        #
+        #     'batch_size': 32,
+        #     'weight_decay': 0.00005,
+        #     'keep_prob': 0.5,
+        #     'learning_rate_start': 0.001,
+        #     'lr_decay_rate': 0.5,
+        #     'lr_decay_steps': 40000 * 10,
+        #     'lr_staircase': False,
+        #     'step_ckpt_dir': './logs/ckpt/',
+        #     'train_logs_dir': './logs/train/',
+        #     'val_logs_dir': './logs/val/',
+        #     'best_val_ckpt_dir': './logs/best_val/',
+        #     'metrics_collection': 'val_metrics',
+        #     'metrics_update_ops_collection': 'update_ops',
+        #     'metrics_reset_ops_collection': 'reset_ops',
+        #     'use_mean_metrics': False,
+        #     'logging_every_n_steps': 1000,
+        #     'summary_every_n_steps': 1000,
+        #     'save_every_n_steps': 1000,
+        #     'evaluate_every_n_steps': 10000,
+        #     'max_steps': None
+        # }
         super().__init__(**kwargs)
         self._training_crop_size = training_crop_size
         self._val_crop_size = val_crop_size
         self._num_classes = num_classes
+        self._fine_tune_steps = fine_tune_steps
+        self._fine_tune_var_list = fine_tune_var_list
+        if fine_tune_steps is not None and fine_tune_var_list is None:
+            raise ValueError('fine_tune_var_list must not be None if fine_tune_steps is not None.')
 
     def _get_training_dataset(self):
         raise NotImplementedError
@@ -27,6 +62,9 @@ class BaseClassificationTrainer(Trainer):
         raise NotImplementedError
 
     def _get_optimizer(self, learning_rate):
+        raise NotImplementedError
+
+    def _get_scaffold(self):
         raise NotImplementedError
 
     def _get_loss(self, logits):
@@ -59,11 +97,16 @@ class BaseClassificationTrainer(Trainer):
 
     def _get_train_op(self, total_loss, optimizer):
         global_step = tf.train.get_or_create_global_step()
-        return create_train_op(total_loss, optimizer, global_step,
-                               update_ops=tf.get_collection(tf.GraphKeys.UPDATE_OPS))
-
-    def _get_scaffold(self):
-        return None
+        if self._fine_tune_steps is None:
+            return create_train_op(total_loss, optimizer, global_step,
+                                   update_ops=tf.get_collection(tf.GraphKeys.UPDATE_OPS))
+        train_op1 = create_train_op(total_loss, optimizer, global_step,
+                                    update_ops=tf.get_collection(tf.GraphKeys.UPDATE_OPS),
+                                    variables_to_train=self._fine_tune_var_list)
+        train_op2 = create_train_op(total_loss, optimizer, global_step,
+                                    update_ops=tf.get_collection(tf.GraphKeys.UPDATE_OPS),
+                                    variables_to_train=self._fine_tune_var_list)
+        return create_finetune_train_op(train_op1, train_op2, self._fine_tune_steps, global_step)
 
     def _get_feed_fn(self):
         return {self._ph_is_training: True,
@@ -80,7 +123,7 @@ class BaseClassificationTrainer(Trainer):
                                                evaluate_feed_dict, None,
                                                tf.get_collection(self._metrics_reset_ops_collection),
                                                tf.get_collection(self._metrics_update_ops_collection),
-                                               main_metric=tf.get_collection(self._metrics_collection)[0])
+                                               main_metric=self._main_metric)
         summary_feed_dict = {
             self._ph_image_size: self._val_crop_size,
             self._ph_is_training: False,
@@ -109,6 +152,9 @@ class ImageNetClassificationTrainer(BaseClassificationTrainer):
             multi_scale_training_list = [256, 512]
         self._data_path = data_path
         self._multi_scale_training_list = multi_scale_training_list
+
+    def _get_scaffold(self):
+        return None
 
     def _get_training_dataset(self):
         return get_imagenet_classification_dataset('train', self._batch_size, self._data_path,

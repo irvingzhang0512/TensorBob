@@ -110,6 +110,8 @@ class Trainer:
 
         # 性能指标相关操作
         metrics = self._get_metrics(logits, total_loss)
+        if metrics is not None:
+            self._main_metric = metrics[0]
         logging.debug('successfully getting metrics')
 
         # 构建train_op, hooks, scaffold
