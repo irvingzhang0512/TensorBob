@@ -42,17 +42,17 @@ def get_images_by_paths_dataset_config(file_paths, **kwargs):
     :param kwargs: 举例如下
     {
         'norm_fn': None,
-        'random_flip_horizontal_flag': True,
-        'random_flip_vertical_flag': True,
-        'random_distort_color_flag': True,
-        'distort_color_fast_mode_flag': True,
+        'random_flip_horizontal_flag': False,
+        'random_flip_vertical_flag': False,
+        'random_distort_color_flag': False,
+        'distort_color_fast_mode_flag': False,
 
         # 下面列举切片相关配置
 
-        # 无切片
+        # 无切片(默认配置)
         'crop_type': CropType.no_crop,
-        'image_width': 500,
-        'image_height': 500,
+        'image_width': None,
+        'image_height': None,
 
         # 中心切片
         'crop_type': CropType.central_crop,
@@ -63,22 +63,22 @@ def get_images_by_paths_dataset_config(file_paths, **kwargs):
 
         # 普通随机切片
         'crop_type': CropType.random_normal,
-        'crop_width': 224,
-        'crop_height': 224,
-        'image_width': 384,
-        'image_height': 384,
+        'crop_width': None,
+        'crop_height': None,
+        'image_width': None,
+        'image_height': None,
 
         # vgg随机切片
         'crop_type': CropType.random_vgg,
-        'crop_width': 224,
-        'crop_height': 224,
-        'vgg_image_size_min': 256,
-        'vgg_image_size_max': 512,
+        'crop_width': None,
+        'crop_height': None,
+        'vgg_image_size_min': None,
+        'vgg_image_size_max': None,
 
         # inception随机切片
         'crop_type': CropType.random_inception,
-        'crop_width': 224,
-        'crop_height': 224,
+        'crop_width': None,
+        'crop_height': None,
         'inception_bbox': None,
 
     }
