@@ -1,5 +1,13 @@
 import tensorflow as tf
-from .preprocessing import random_flip_horizontal, random_flip_vertical, central_crop, random_crop
+from enum import Enum
+from .preprocessing import central_crop, random_crop, random_crop_inception, random_crop_vgg, random_distort_color
+
+
+__all__ = ['get_dataset_by_config',
+           'get_images_by_paths_dataset_config',
+           'get_classification_labels_dataset_config',
+           'CropType',
+           ]
 
 
 def get_dataset_by_config(dataset_config):
@@ -26,41 +34,83 @@ def get_dataset_by_config(dataset_config):
 
 ################################### 根据图片路径获取对应的dataset ###############################################
 
-def get_images_path_dataset_config(file_paths, **kwargs):
+
+def get_images_by_paths_dataset_config(file_paths, **kwargs):
     """
     通过file_paths获取图片
     :param file_paths: 图片path
     :param kwargs: 举例如下
     {
-        'image_width': 500,
-        'image_height': 500,
         'norm_fn': None,
-        'crop_width': 300,
-        'crop_height': 200,
-        'central_crop_flag': True,
         'random_flip_horizontal_flag': True,
         'random_flip_vertical_flag': True,
-        'multi_scale_training_list': [256, 384, 256, 384],
+        'random_distort_color_flag': True,
+        'distort_color_fast_mode_flag': True,
+
+        # 下面列举切片相关配置
+
+        # 无切片
+        'crop_type': CropType.no_crop,
+        'image_width': 500,
+        'image_height': 500,
+
+        # 中心切片
+        'crop_type': CropType.central_crop,
+        'crop_width': 300,
+        'crop_height': 200,
+        'image_width': 500,
+        'image_height': 500,
+
+        # 普通随机切片
+        'crop_type': CropType.random_normal,
+        'crop_width': 224,
+        'crop_height': 224,
+        'image_width': 384,
+        'image_height': 384,
+
+        # vgg随机切片
+        'crop_type': CropType.random_vgg,
+        'crop_width': 224,
+        'crop_height': 224,
+        'vgg_image_size_min': 256,
+        'vgg_image_size_max': 512,
+
+        # inception随机切片
+        'crop_type': CropType.random_inception,
+        'crop_width': 224,
+        'crop_height': 224,
+        'inception_bbox': None,
+
     }
-    1. image_width/image_height 和 multi_scale_training_list的作用相同，相当于对图片进行resize。
-        上述两个参数必须存在其中一个，同时存在则 multi_scale_training_list 起作用。
-    2. crop_width/crop_height 有一个为None时，不切片，返回整张图。
     :return:
     """
     dataset_config = {
         'type': 0,
         'src': file_paths,
-        'image_width': kwargs.get('image_width'),
-        'image_height': kwargs.get('image_height'),
         'norm_fn': kwargs.get('norm_fn'),
-        'crop_width': kwargs.get('crop_width'),
-        'crop_height': kwargs.get('crop_height'),
-        'central_crop_flag': kwargs.get('central_crop_flag') or False,
         'random_flip_horizontal_flag': kwargs.get('random_flip_horizontal_flag') or False,
         'random_flip_vertical_flag': kwargs.get('random_flip_vertical_flag') or False,
-        'multi_scale_training_list': kwargs.get('multi_scale_training_list'),
+        'random_distort_color_flag': kwargs.get('random_distort_color_flag') or False,
+        'distort_color_fast_mode_flag': kwargs.get('distort_color_fast_mode_flag') or False,
+
+        'crop_type': kwargs.get('crop_type') or CropType.no_crop,
+        'image_width': kwargs.get('image_width'),
+        'image_height': kwargs.get('image_height'),
+        'crop_width': kwargs.get('crop_width'),
+        'crop_height': kwargs.get('crop_height'),
+        'vgg_image_size_min': kwargs.get('vgg_image_size_min'),
+        'vgg_image_size_max': kwargs.get('vgg_image_size_max'),
+        'inception_bbox': kwargs.get('inception_bbox'),
     }
     return dataset_config
+
+
+class CropType(Enum):
+    no_crop = 1
+    central = 2
+    random_normal = 3
+    random_vgg = 4
+    random_inception = 5
 
 
 def _get_images_path_dataset(dataset_config):
@@ -70,37 +120,23 @@ def _get_images_path_dataset(dataset_config):
     :return: tf.data.Dataset 实例
     """
     file_paths = dataset_config.get('src')  # 原始数据，即图片路径
-    image_width = dataset_config.get('image_width')  # 图片resize宽度
-    image_height = dataset_config.get('image_height')  # 图片resize高度
     norm_fn = dataset_config.get('norm_fn')  # 归一化函数
+
+    # 切片参数
+    crop_type = dataset_config.get('crop_type')  # crop方法
+    # 可以选择 无切片、普通随机切片、中心切片、vgg切片、inception切片四种
     crop_width = dataset_config.get('crop_width')  # 切片宽
     crop_height = dataset_config.get('crop_height')  # 切片高
-    central_crop_flag = dataset_config.get('central_crop_flag')  # 是否使用中心切片（默认随机切片）
+    image_width = dataset_config.get('image_width')  # 用于无切片、普通切片、中心切片
+    image_height = dataset_config.get('image_height')  # 用于无切片、普通切片、中心切片
+    vgg_image_size_min = dataset_config.get('vgg_image_size_min')  # 用于vgg切片
+    vgg_image_size_max = dataset_config.get('vgg_image_size_max')  # 用于vgg切片
+    inception_bbox = dataset_config.get('inception_bbox')  # 用于inception切片
+
     random_flip_horizontal_flag = dataset_config.get('random_flip_horizontal_flag')  # 随机水平镜像
     random_flip_vertical_flag = dataset_config.get('random_flip_vertical_flag')  # 随机垂直镜像
-
-    # 实现vgg中的 multi-scale 数据增强
-    # 输入的multi_scale_list，必须长度为2或4，代表图片长宽的最小、大尺寸， 如(256, 384, 256, 384)
-    multi_scale_training_list = dataset_config['multi_scale_training_list']
-    if multi_scale_training_list:
-        if len(multi_scale_training_list) == 2:
-            image_height = tf.random_uniform([],
-                                             multi_scale_training_list[0],
-                                             multi_scale_training_list[1] + 1,
-                                             dtype=tf.int32)
-            image_width = image_height
-        elif len(multi_scale_training_list) == 4:
-            image_height = tf.random_uniform([],
-                                             multi_scale_training_list[0],
-                                             multi_scale_training_list[1] + 1,
-                                             dtype=tf.int32)
-            image_width = tf.random_uniform([],
-                                            multi_scale_training_list[2],
-                                            multi_scale_training_list[3] + 1,
-                                            dtype=tf.int32)
-        else:
-            raise ValueError(
-                'multi_scale_training_list has 2 or 4 elements but get %d' % (len(multi_scale_training_list)))
+    random_distort_color_flag = dataset_config.get('random_distort_color_flag')  # 随机颜色变换
+    distort_color_fast_mode_flag = dataset_config.get('distort_color_fast_mode_flag')  # 颜色变换模式
 
     def _cur_parse_image_fn(image_path):
         img_file = tf.read_file(image_path)
@@ -108,28 +144,53 @@ def _get_images_path_dataset(dataset_config):
         # https://github.com/tensorflow/tensorflow/issues/14226
         cur_image = tf.image.decode_jpeg(img_file, channels=3)
 
-        # resize
-        if image_width is not None and image_height is not None:
-            cur_image = tf.image.resize_images(cur_image, [image_height, image_width])
-
-        # 镜像
-        if random_flip_horizontal_flag:
-            cur_image = random_flip_horizontal(cur_image)
-        if random_flip_vertical_flag:
-            cur_image = random_flip_vertical(cur_image)
-
         # 归一化
         if norm_fn:
             cur_image = norm_fn(cur_image)
 
-        # 切片
-        if crop_width is not None and crop_height is not None:
-            if central_crop_flag:
-                # 通过配置，可以使用中心切片
-                cur_image = central_crop(cur_image, crop_height, crop_width)
-            else:
-                # 默认使用随机切片
-                cur_image = random_crop(cur_image, crop_height, crop_width)
+        # 镜像
+        if random_flip_horizontal_flag:
+            cur_image = tf.image.random_flip_left_right(cur_image)
+        if random_flip_vertical_flag:
+            cur_image = tf.image.random_flip_up_down(cur_image)
+
+        # resize与切片
+        if crop_type is CropType.no_crop:
+            if image_width is not None and image_height is not None:
+                cur_image = tf.image.resize_images(cur_image, [image_height, image_width])
+        elif crop_type is CropType.central:
+            if crop_width is None or crop_height is None:
+                raise ValueError('crop_width and crop_height must not be None when using central crop')
+            if image_width is not None and image_height is not None:
+                cur_image = tf.image.resize_images(cur_image, [image_height, image_width])
+            cur_image = central_crop(cur_image, crop_height, crop_width)
+        elif crop_type is CropType.random_normal:
+            if crop_width is None or crop_height is None:
+                raise ValueError('crop_width and crop_height must not be None when using normal random crop')
+            if image_width is None or image_height is None:
+                raise ValueError('image_width and image_height must not be None when using normal random crop')
+            cur_image = tf.image.resize_images(cur_image, [image_height, image_width])
+            cur_image = random_crop(cur_image, crop_height, crop_width)
+        elif crop_type is CropType.random_vgg:
+            if crop_width is None or crop_height is None:
+                raise ValueError('crop_width and crop_height must not be None when using vgg random crop')
+            if vgg_image_size_max is None or vgg_image_size_min is None:
+                raise ValueError('vgg_image_size_min and vgg_image_size_max '
+                                 'must not be None when using vgg random crop')
+            cur_image = random_crop_vgg(cur_image,
+                                        vgg_image_size_min, vgg_image_size_max,
+                                        crop_height, crop_width)
+        elif crop_type is CropType.random_inception:
+            if crop_width is None or crop_height is None:
+                raise ValueError('crop_width and crop_height must not be None when using vgg random crop')
+            cur_image = random_crop_inception(cur_image, crop_height, crop_width, inception_bbox)
+        else:
+            raise ValueError('undown crop type {}'.format(crop_type))
+
+        # 色彩变换
+        if random_distort_color_flag:
+            cur_image = random_distort_color(cur_image, distort_color_fast_mode_flag)
+
         return cur_image
 
     cur_dataset = tf.data.Dataset.from_tensor_slices(file_paths).map(_cur_parse_image_fn)
