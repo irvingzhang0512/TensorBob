@@ -3,6 +3,9 @@ from tensorflow.python.framework.errors_impl import OutOfRangeError
 from .dataset_utils import get_dataset_by_config
 
 
+__all__ = ['BaseDataset']
+
+
 class BaseDataset:
     """
     基本的Dataset类型

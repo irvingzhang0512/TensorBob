@@ -1,7 +1,7 @@
 # 数据集中文介绍：
 
 import os
-from .dataset_utils import get_images_path_dataset_config, get_classification_labels_dataset_config
+from .dataset_utils import get_images_by_paths_dataset_config, get_classification_labels_dataset_config
 from .base_dataset import BaseDataset
 
 # VOC2012_ROOT_DIR = "D:\\PycharmProjects\\data\\VOCdevkit\\VOC2012"
@@ -53,14 +53,13 @@ def _get_classification_paths_and_labels(mode='trainval'):
 def get_voc_classification_dataset(mode='train', batch_size=32, **kwargs):
     """
     获取voc classification的 dataset
-    :param epochs: 重复次数
     :param mode: 指定模式，train val trainval 三选一
     :param batch_size:
     :param kwargs:
     :return:
     """
     paths, labels = _get_classification_paths_and_labels(mode)
-    images_config = get_images_path_dataset_config(paths, **kwargs)
+    images_config = get_images_by_paths_dataset_config(paths, **kwargs)
     labels_config = get_classification_labels_dataset_config(labels)
     dataset_configs = [images_config, labels_config]
     train_mode = (mode == 'train')
