@@ -4,7 +4,7 @@ from .preprocessing import central_crop, random_crop, random_crop_inception, ran
 
 
 __all__ = ['get_dataset_by_config',
-           'get_images_by_paths_dataset_config',
+           'get_images_dataset_by_paths_config',
            'get_classification_labels_dataset_config',
            'CropType',
            ]
@@ -35,13 +35,14 @@ def get_dataset_by_config(dataset_config):
 ################################### 根据图片路径获取对应的dataset ###############################################
 
 
-def get_images_by_paths_dataset_config(file_paths, **kwargs):
+def get_images_dataset_by_paths_config(file_paths, **kwargs):
     """
     通过file_paths获取图片
     :param file_paths: 图片path
     :param kwargs: 举例如下
     {
-        'norm_fn': None,
+        'norm_fn_first': None,
+        'norm_fn_end': None,
         'random_flip_horizontal_flag': False,
         'random_flip_vertical_flag': False,
         'random_distort_color_flag': False,
@@ -87,7 +88,8 @@ def get_images_by_paths_dataset_config(file_paths, **kwargs):
     dataset_config = {
         'type': 0,
         'src': file_paths,
-        'norm_fn': kwargs.get('norm_fn'),
+        'norm_fn_first': kwargs.get('norm_fn_first'),
+        'norm_fn_end': kwargs.get('norm_fn_end'),
         'random_flip_horizontal_flag': kwargs.get('random_flip_horizontal_flag') or False,
         'random_flip_vertical_flag': kwargs.get('random_flip_vertical_flag') or False,
         'random_distort_color_flag': kwargs.get('random_distort_color_flag') or False,
@@ -120,7 +122,8 @@ def _get_images_path_dataset(dataset_config):
     :return: tf.data.Dataset 实例
     """
     file_paths = dataset_config.get('src')  # 原始数据，即图片路径
-    norm_fn = dataset_config.get('norm_fn')  # 归一化函数
+    norm_fn_first = dataset_config.get('norm_fn_first')  # 归一化函数
+    norm_fn_end = dataset_config.get('norm_fn_end')  # 归一化函数
 
     # 切片参数
     crop_type = dataset_config.get('crop_type')  # crop方法
@@ -144,9 +147,8 @@ def _get_images_path_dataset(dataset_config):
         # https://github.com/tensorflow/tensorflow/issues/14226
         cur_image = tf.image.decode_jpeg(img_file, channels=3)
 
-        # 归一化
-        if norm_fn:
-            cur_image = norm_fn(cur_image)
+        if norm_fn_first:
+            cur_image = norm_fn_first(cur_image)
 
         # 镜像
         if random_flip_horizontal_flag:
@@ -190,6 +192,9 @@ def _get_images_path_dataset(dataset_config):
         # 色彩变换
         if random_distort_color_flag:
             cur_image = random_distort_color(cur_image, distort_color_fast_mode_flag)
+
+        if norm_fn_end:
+            cur_image = norm_fn_end(cur_image)
 
         return cur_image
 

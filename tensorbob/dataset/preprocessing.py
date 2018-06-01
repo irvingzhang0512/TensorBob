@@ -147,6 +147,10 @@ def random_crop_inception(image, crop_height, crop_width,
     :return:
     """
     with tf.name_scope(scope, 'random_crop_inception', [image, bbox]):
+        if bbox is None:
+            bbox = tf.constant([0.0, 0.0, 1.0, 1.0],
+                               dtype=tf.float32,
+                               shape=[1, 1, 4])
         sample_distorted_bounding_box = tf.image.sample_distorted_bounding_box(
             tf.shape(image),
             bounding_boxes=bbox,

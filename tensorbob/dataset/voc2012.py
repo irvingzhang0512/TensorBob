@@ -1,7 +1,7 @@
 # 数据集中文介绍：
 
 import os
-from .dataset_utils import get_images_by_paths_dataset_config, get_classification_labels_dataset_config
+from .dataset_utils import get_images_dataset_by_paths_config, get_classification_labels_dataset_config
 from .base_dataset import BaseDataset
 
 # VOC2012_ROOT_DIR = "D:\\PycharmProjects\\data\\VOCdevkit\\VOC2012"
@@ -59,7 +59,7 @@ def get_voc_classification_dataset(mode='train', batch_size=32, **kwargs):
     :return:
     """
     paths, labels = _get_classification_paths_and_labels(mode)
-    images_config = get_images_by_paths_dataset_config(paths, **kwargs)
+    images_config = get_images_dataset_by_paths_config(paths, **kwargs)
     labels_config = get_classification_labels_dataset_config(labels)
     dataset_configs = [images_config, labels_config]
     train_mode = (mode == 'train')

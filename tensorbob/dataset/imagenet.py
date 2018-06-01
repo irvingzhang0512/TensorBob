@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import scipy.io
-from .dataset_utils import get_images_by_paths_dataset_config, get_classification_labels_dataset_config
+from .dataset_utils import get_images_dataset_by_paths_config, get_classification_labels_dataset_config
 from .base_dataset import BaseDataset
 
 
@@ -91,7 +91,7 @@ def get_imagenet_classification_dataset(mode,
                                         prefetch_buffer_size=10000,
                                         **kwargs):
     paths, labels = _get_images_paths_and_labels(mode, data_path)
-    images_config = get_images_by_paths_dataset_config(paths, **kwargs)
+    images_config = get_images_dataset_by_paths_config(paths, **kwargs)
     labels_config = get_classification_labels_dataset_config(labels)
     dataset_config = [images_config, labels_config]
     train_mode = True if mode == 'train' else False
