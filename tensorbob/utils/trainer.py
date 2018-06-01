@@ -9,7 +9,7 @@ class Trainer:
     def __init__(self,
                  batch_size=32, weight_decay=0.00005, keep_prob=0.5,
 
-                 learning_rate_start=0.001, lr_decay_rate=0.5, lr_decay_steps=40000*10, lr_staircase=False,
+                 learning_rate_start=0.001, lr_decay_rate=0.5, lr_decay_steps=40000 * 10, lr_staircase=False,
 
                  step_ckpt_dir='./logs/ckpt/', train_logs_dir='./logs/train/',
                  val_logs_dir='./logs/val/', best_val_ckpt_dir='./logs/best_val/',
@@ -50,13 +50,20 @@ class Trainer:
         self._lr_decay_steps = lr_decay_steps
         self._lr_staircase = lr_staircase
 
+        self._train_dataset = None
+        self._val_dataset = None
+        self._main_metric = None
+
     def _get_training_dataset(self):
         raise NotImplementedError
 
     def _get_val_dataset(self):
         raise NotImplementedError
 
-    def _get_optimizer(self, learning_rate):
+    def _get_optimizer(self):
+        raise NotImplementedError
+
+    def _get_learning_rate(self):
         raise NotImplementedError
 
     def _get_model(self):
@@ -77,7 +84,7 @@ class Trainer:
     def _get_scaffold(self):
         raise NotImplementedError
 
-    def _get_feed_fn(self):
+    def _get_train_feed_fn(self):
         raise NotImplementedError
 
     def train(self):
@@ -95,17 +102,8 @@ class Trainer:
         total_loss = self._get_loss(logits)
         logging.debug('successfully getting total loss')
 
-        # 获取学习率
-        global_step = tf.train.get_or_create_global_step()
-        learning_rate = tf.train.exponential_decay(self._learning_rate_start,
-                                                   global_step,
-                                                   self._lr_decay_steps,
-                                                   self._lr_decay_rate,
-                                                   self._lr_staircase,
-                                                   'learning_rate')
-
         # 构建优化器
-        optimizer = self._get_optimizer(learning_rate)
+        optimizer = self._get_optimizer()
         logging.debug('successfully getting optimizer')
 
         # 性能指标相关操作
@@ -117,15 +115,13 @@ class Trainer:
         # 构建train_op, hooks, scaffold
         train_op = self._get_train_op(total_loss, optimizer)
         logging.debug('successfully getting train_op')
-
         hooks = self._get_hooks()
         logging.debug('successfully getting hooks')
-
         scaffold = self._get_scaffold()
         logging.debug('successfully getting scaffold')
 
-        # summary writer
-        summary_writer = tf.summary.FileWriter(self._train_logs_dir)
+        # train summary writer
+        summary_writer = tf.summary.FileWriter(self._train_logs_dir, graph=tf.get_default_graph())
 
         logging.debug('training start')
         train(train_op,
@@ -135,6 +131,6 @@ class Trainer:
               max_steps=self._max_steps,
               logging_tensors=metrics,
               logging_every_n_steps=self._logging_every_n_steps,
-              feed_fn=self._get_feed_fn,
+              feed_fn=self._get_train_feed_fn,
               summary_writer=summary_writer, summary_every_n_steps=self._summary_every_n_steps,
               save_every_n_steps=self._save_every_n_steps)

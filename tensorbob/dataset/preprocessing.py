@@ -111,7 +111,7 @@ def random_crop_vgg(image,
         resize_length = tf.random_uniform(
             [], minval=resize_min, maxval=resize_max + 1, dtype=tf.int32)
         image = resize_smallest_size(image, resize_length, resize_length, True)
-        original_shape = image.shape()
+        original_shape = tf.shape(image)
         size_assertion = tf.Assert(
             tf.logical_and(
                 tf.greater_equal(original_shape[0], crop_height),

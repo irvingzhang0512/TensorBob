@@ -125,10 +125,10 @@ def evaluate_on_single_scale(scale,
             raise ValueError('feed_dict must not be None')
         print('evaluate val set...')
         if ph_val_image_size is not None:
-            val_feed_dict = {ph_val_image_size: scale}
+            reset_feed_dict = {ph_val_image_size: scale}
         else:
-            val_feed_dict = None
-        dataset.reset(sess, feed_dict=val_feed_dict)
+            reset_feed_dict = None
+        dataset.reset(sess, feed_dict=reset_feed_dict)
         sess.run(metrics_reset_ops)
         while True:
             try:
