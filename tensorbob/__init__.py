@@ -9,3 +9,4 @@ from .utils import training_utils
 from .utils import nets_utils
 from .utils import basic_trainers
 from .utils import trainer
+from .utils import evaluator

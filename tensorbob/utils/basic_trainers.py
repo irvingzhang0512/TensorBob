@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import os
 from .trainer import Trainer
 from .training import create_train_op, create_finetune_train_op
 from .training_utils import TrainDatasetFeedDictHook, evaluate_on_single_scale, ValidationDatasetEvaluationHook
@@ -147,7 +148,8 @@ class BaseClassificationTrainer(Trainer):
                                                                    self._evaluate_every_n_steps,
                                                                    summary_op=tf.summary.merge_all(),
                                                                    summary_writer=val_summary_writer,
-                                                                   saver_file_prefix=self._best_val_ckpt_dir,
+                                                                   saver_file_prefix=os.path.join(self._best_val_ckpt_dir,
+                                                                                                  'model.ckpt'),
                                                                    evaluate_fn=evaluate_fn,
                                                                    summary_feed_dict=summary_feed_dict)
         return [train_dataset_hook, validation_evaluate_hook]
