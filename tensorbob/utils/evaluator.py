@@ -2,14 +2,9 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.framework.errors_impl import OutOfRangeError
-from tensorbob.dataset.imagenet import get_imagenet_classification_dataset
-from tensorbob.dataset.dataset_utils import CropType
-from tensorbob.dataset.preprocessing import norm_imagenet
-from .variables import get_variables_to_restore, assign_from_checkpoint_fn
-from nets import nets_factory
 
 
-__all__ = ['Evaluator', 'ImageNetEvaluator']
+__all__ = ['Evaluator']
 
 
 class Evaluator:
@@ -115,9 +110,10 @@ class Evaluator:
                                 labels = cur_y if labels is None else np.concatenate((labels, cur_y), axis=0)
                         else:
                             cur_x = dataset_res
-                        logging.debug('cur_x.shape is {}'.format(cur_x.shape))
+#                         logging.debug('cur_x.shape is {}'.format(cur_x.shape))
                         feed_dict[ph_x] = cur_x
                         cur_predictions = sess.run(predictions, feed_dict=feed_dict)
+#                         logging.debug(np.mean(np.equal(np.argmax(cur_predictions, axis=1), cur_y).astype(np.float32)))
                         cur_res = cur_predictions if cur_res is None else np.concatenate((cur_res, cur_predictions),
                                                                                          axis=0)
                     except OutOfRangeError:
@@ -128,45 +124,3 @@ class Evaluator:
             return res/loop_number, labels
         else:
             return res/loop_number
-
-
-class ImageNetEvaluator(Evaluator):
-    def __init__(self, **kwargs):
-        """
-
-        batch_size=32,
-        multi_crop_number=None,
-        multi_scale_list=None,
-        evaluate_image_size=None
-
-        :param kwargs:
-        """
-        super().__init__(**kwargs)
-
-    def _get_test_dataset(self):
-        ph_val_image_size = tf.placeholder(tf.int32)
-        test_dataset = get_imagenet_classification_dataset(mode='val',
-                                                           batch_size=self._batch_size,
-                                                           data_path='/home/tensorflow05/data/ILSVRC2012',
-                                                           norm_fn_first=norm_imagenet,
-                                                           crop_type=CropType.no_crop,
-                                                           image_width=ph_val_image_size,
-                                                           image_height=ph_val_image_size,
-                                                           )
-        return test_dataset, ph_val_image_size
-
-    def _get_graph_and_feed_dict(self):
-        ph_x = tf.placeholder(tf.float32)
-        ph_image_size = tf.placeholder(tf.int32)
-        model_fn = nets_factory.get_network_fn('vgg_16', 1000)
-        logits, _ = model_fn(tf.reshape(ph_x, [-1, ph_image_size, ph_image_size, 3]), global_pool=True)
-        predictions = tf.nn.softmax(logits)
-        return ph_x, ph_image_size, predictions, None
-
-    def _get_init_fn(self):
-        variables_to_restore = get_variables_to_restore(include=['vgg_16'])
-        return assign_from_checkpoint_fn(self._pre_trained_model_path,
-                                         variables_to_restore,
-                                         ignore_missing_vars=True,
-                                         reshape_variables=True)
-
