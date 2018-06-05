@@ -6,6 +6,7 @@ sys.path.append('/home/tensorflow05/zyy/tensorbob/')
 sys.path.append('/home/tensorflow05/zyy/models/research/slim/')
 import tensorbob as bob
 import numpy as np
+from nets import nets_factory
 
 logger = logging.getLogger('tensorflow')
 logger.setLevel(logging.DEBUG)
@@ -53,19 +54,22 @@ args = parser.parse_args()
 
 def get_dataset():
     train_dataset_config = {
-        'norm_fn': bob.data.norm_imagenet,
+        'norm_fn_first': bob.data.norm_zero_to_one,
+        'norm_fn_last': bob.data.norm_minus_one_to_one,
+        'crop_type': bob.data.CropType.random_vgg,
         'crop_width': args.TRAIN_CROP_IMAGE_SIZE,
         'crop_height': args.TRAIN_CROP_IMAGE_SIZE,
+        'vgg_image_size_min': args.TRAIN_MIN_IMAGE_SIZE,
+        'vgg_image_size_max': args.TRAIN_MAX_IMAGE_SIZE,
         'random_flip_horizontal_flag': True,
-        'random_flip_vertical_flag': True,
-        'multi_scale_training_list': [args.TRAIN_MIN_IMAGE_SIZE, args.TRAIN_MAX_IMAGE_SIZE],
     }
     train_dataset = bob.data.get_imagenet_classification_dataset('train',
                                                                  args.BATCH_SIZE,
                                                                  args.DATA_ROOT, 100, 100,
                                                                  **train_dataset_config)
     val_dataset_config = {
-        'norm_fn': bob.data.norm_imagenet,
+        'norm_fn_first': bob.data.norm_zero_to_one,
+        'norm_fn_last': bob.data.norm_minus_one_to_one,
         'image_width': args.VAL_SINGLE_IMAGE_SIZE,
         'image_height': args.VAL_SINGLE_IMAGE_SIZE,
     }
@@ -79,17 +83,8 @@ def get_dataset():
 
 
 def get_model(x, is_training):
-    training_dict = {
-        'is_training': is_training,
-        'weight_decay': args.WEIGHT_DECAY,
-        'dropout_keep_prob': args.KEEP_PROB
-    }
-
-    model_dict = {
-        'input_tensor': x,
-        'num_classes': args.NUM_CLASSES,
-    }
-    logits, _ = bob.nets_utils.mobilenet_v2_model(training_dict, model_dict)
+    model_fn = nets_factory.get_network_fn("mobilenet_v2", args.NUM_CLASSES, args.WEIGHT_DECAY, is_training)
+    logits, _ = model_fn(x, dropout_keep_prob=args.KEEP_PROB)
     return logits
 
 

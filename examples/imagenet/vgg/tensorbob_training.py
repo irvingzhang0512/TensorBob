@@ -1,15 +1,12 @@
 import tensorflow as tf
-import sys
-sys.path.append('/home/tensorflow05/zyy/tensorbob')
-sys.path.append('/home/tensorflow/zyy/models/research/')
-import slim.nets.vgg as vgg
+import nets.vgg as vgg
 import tensorflow.contrib.slim as slim
 import tensorbob as bob
 import argparse
 import logging
+
 logger = logging.getLogger('tensorflow')
 logger.setLevel(logging.DEBUG)
-
 
 parser = argparse.ArgumentParser()
 
@@ -41,7 +38,7 @@ parser.add_argument('--VAL_EVERY_N_STEPS', help='每经过多少steps，在验�
 parser.add_argument('--LOGGING_EVERY_N_STEPS', help='每经过多少steps，在命令行中输出一次metrics', type=int, default=1000)
 parser.add_argument('--SUMMARY_EVERY_N_STEPS', help='每经过多少steps，summary一次数据', type=int, default=1000)
 parser.add_argument('--SAVE_EVERY_N_STEPS', help='每经过多少steps，summary一次数据save一次', type=int, default=5000)
-parser.add_argument('--MAX_STEPS', help='训练最大步数', type=int, default=40000*80)
+parser.add_argument('--MAX_STEPS', help='训练最大步数', type=int, default=40000 * 80)
 
 # metrics相关
 parser.add_argument('--METRICS_COLLECTION', help='', type=str, default='val_metrics')
@@ -53,19 +50,20 @@ args = parser.parse_args()
 
 def get_dataset():
     train_dataset_config = {
-        'norm_fn': bob.data.norm_imagenet,
+        'norm_fn_first': bob.data.norm_imagenet,
+        'crop_type': bob.data.CropType.random_vgg,
         'crop_width': args.TRAIN_CROP_IMAGE_SIZE,
         'crop_height': args.TRAIN_CROP_IMAGE_SIZE,
         'random_flip_horizontal_flag': True,
-        'random_flip_vertical_flag': True,
-        'multi_scale_training_list': [args.TRAIN_MIN_IMAGE_SIZE, args.TRAIN_MAX_IMAGE_SIZE],
+        'vgg_image_size_min': args.TRAIN_MIN_IMAGE_SIZE,
+        'vgg_image_size_max': args.TRAIN_MAX_IMAGE_SIZE,
     }
     train_dataset = bob.data.get_imagenet_classification_dataset('train',
                                                                  args.BATCH_SIZE,
                                                                  args.DATA_ROOT,
                                                                  **train_dataset_config)
     val_dataset_config = {
-        'norm_fn': bob.data.norm_imagenet,
+        'norm_fn_first': bob.data.norm_imagenet,
         'image_width': args.VAL_SINGLE_IMAGE_SIZE,
         'image_height': args.VAL_SINGLE_IMAGE_SIZE,
     }
@@ -179,6 +177,7 @@ def main():
     # 训练
     def get_training_feed_dict():
         return {ph_is_training: True, ph_image_size: args.TRAIN_CROP_IMAGE_SIZE}
+
     bob.training.train(train_op, args.LOGS_DIR, hooks=hooks,
                        max_steps=args.MAX_STEPS,
 
