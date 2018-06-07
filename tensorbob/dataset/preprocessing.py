@@ -42,11 +42,12 @@ def norm_zero_to_one(image):
 def norm_minus_one_to_one(image):
     """
     将原始图片像素数据数据从tf.uint8转换为tf.float32，数据范围是[-1, 1]
-    PS：如果输入tensor原本就是tf.float32，则默认image处于[0, 1]之间
+    PS：如果输入tensor原本就是tf.float32，则默认进行剪裁到[0, 1]之间
     :param image:
     :return:
     """
     image = tf.image.convert_image_dtype(image, tf.float32)
+    image = tf.clip_by_value(image, .0, 1.0)
     image = tf.multiply(image, 2.0)
     image = tf.add(image, -1.0)
     return image

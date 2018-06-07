@@ -6,6 +6,7 @@ from .preprocessing import central_crop, random_crop, random_crop_inception, ran
 __all__ = ['get_dataset_by_config',
            'get_images_dataset_by_paths_config',
            'get_classification_labels_dataset_config',
+           'get_segmentation_labels_dataset_config',
            'CropType',
            ]
 
@@ -27,7 +28,10 @@ def get_dataset_by_config(dataset_config):
         return _get_images_path_dataset(dataset_config), len(dataset_config['src'])
     elif dataset_type == 1:
         # 通过分类标签获取 dataset
-        return _get_labels_dataset(dataset_config), len(dataset_config['src'])
+        return _get_classification_labels_dataset(dataset_config), len(dataset_config['src'])
+    elif dataset_type == 2:
+        # 通过图像分割标签 获取dataset
+        return _get_segmentation_labels_dataset(dataset_config), len(dataset_config['src'])
     else:
         raise ValueError('unknown dataset type {}'.format(dataset_type))
 
@@ -217,7 +221,7 @@ def get_classification_labels_dataset_config(labels):
     return dataset_config
 
 
-def _get_labels_dataset(dataset_config):
+def _get_classification_labels_dataset(dataset_config):
     """
     {
         'type': 1,
@@ -228,3 +232,37 @@ def _get_labels_dataset(dataset_config):
     """
     src = dataset_config['src']
     return tf.data.Dataset.from_tensor_slices(tf.constant(src))
+
+
+###################################### 获取 图像分割 标签 ##################################################
+
+def get_segmentation_labels_dataset_config(file_paths, color_to_int_list, **kwargs):
+    return {
+        'type': 2,
+        'src': file_paths,
+        'color_to_int_list': color_to_int_list,
+        'image_height': kwargs.get('image_height'),
+        'image_width': kwargs.get('image_width'),
+    }
+
+
+def _get_segmentation_labels_dataset(dataset_config):
+    file_paths = dataset_config.get('src')  # 原始数据，即图片路径
+    color_to_int_list = dataset_config.get('color_to_int_list')  # 归一化函数
+    image_height = dataset_config.get('image_height')
+    image_width = dataset_config.get('image_width')
+
+    def _cur_parse_image_fn(image_path):
+        img_file = tf.read_file(image_path)
+        cur_image = tf.image.decode_jpeg(img_file, channels=3)
+
+        if image_width is not None and image_height is not None:
+            cur_image = tf.expand_dims(cur_image, 0)
+            cur_image = tf.image.resize_nearest_neighbor(cur_image, [image_height, image_width])
+            cur_image = tf.squeeze(cur_image, [0])
+
+        channels = tf.split(cur_image, 3, axis=2)
+        cur_image = (256 * channels[0] + channels[1]) * 256 + channels[2]
+        return tf.cast(tf.gather(color_to_int_list, tf.cast(cur_image, tf.int32)), tf.int32)
+
+    return tf.data.Dataset.from_tensor_slices(file_paths).map(_cur_parse_image_fn)
