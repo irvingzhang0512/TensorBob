@@ -7,7 +7,7 @@ logger = logging.getLogger('tensorflow')
 logger.setLevel(logging.DEBUG)
 
 
-class ImageNetMobileNetTrainer(bob.basic_trainers.BaseClassificationTrainer):
+class ImageNetMobileNetTrainer(bob.trainer.BaseClassificationTrainer):
     def __init__(self, **kwargs):
         super().__init__(val_crop_size=224, **kwargs)
 

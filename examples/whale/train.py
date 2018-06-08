@@ -49,7 +49,7 @@ def get_train_val_paths_and_labels(data_root):
     return train_paths[ids], train_labels[ids], val_paths, val_labels, labels_str_to_int
 
 
-class WhaleTrainer(bob.basic_trainers.BaseClassificationTrainer):
+class WhaleTrainer(bob.trainer.BaseClassificationTrainer):
     def __init__(self, data_root='D:\\PycharmProjects\\data\\kaggle\\humpback_whale_identification',
                  pre_trained_model_path=None,
                  **kwargs):
