@@ -1,12 +1,15 @@
 import tensorbob as bob
 import tensorflow as tf
 import logging
+
 logger = logging.getLogger('tensorflow')
 logger.setLevel(logging.DEBUG)
 
 
 class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
-    def __init__(self, pre_trained_model_path = None,
+    def __init__(self,
+                 data_path,
+                 pre_trained_model_path=None,
                  **kwargs):
         # {
         #     'training_crop_size': 224,
@@ -34,6 +37,7 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
         #     'max_steps': None
         # }
         super().__init__(num_classes=21, **kwargs)
+        self._data_path = data_path
         self._pre_trained_model_path = pre_trained_model_path
 
     def _get_training_dataset(self):
@@ -42,8 +46,11 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
             'image_width': 224,
             'image_height': 224,
         }
-        return bob.data.get_voc_segmentation_dataset('train', batch_size=self._batch_size,
-                                                     label_image_height=224, label_image_width=224,
+        return bob.data.get_voc_segmentation_dataset(self._data_path,
+                                                     'train',
+                                                     batch_size=self._batch_size,
+                                                     label_image_height=224,
+                                                     label_image_width=224,
                                                      **train_configs
                                                      )
 
@@ -53,8 +60,11 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
             'image_width': 224,
             'image_height': 224,
         }
-        return bob.data.get_voc_segmentation_dataset('val', batch_size=self._batch_size,
-                                                     label_image_height=224, label_image_width=224,
+        return bob.data.get_voc_segmentation_dataset(self._data_path,
+                                                     'val',
+                                                     batch_size=self._batch_size,
+                                                     label_image_height=224,
+                                                     label_image_width=224,
                                                      **val_configs
                                                      )
 
@@ -77,7 +87,7 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
                                                                       exclude=['vgg16_fcn_8s/vgg_16/fc8'])
         var_dict = {}
         for var in variables_to_restore:
-            var_name = var.name[var.name.find('/')+1:var.name.find(':')]
+            var_name = var.name[var.name.find('/') + 1:var.name.find(':')]
             var_dict[var_name] = var
             print(var_name, var)
 
@@ -94,7 +104,8 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
 
 
 if __name__ == '__main__':
-    t = VocSegmentationTrainer(pre_trained_model_path='/home/tensorflow05/data/pre-trained/slim/vgg_16.ckpt',
+    t = VocSegmentationTrainer(data_path="/home/tensorflow05/data/VOC2012",
+                               pre_trained_model_path='/home/tensorflow05/data/pre-trained/slim/vgg_16.ckpt',
                                logging_every_n_steps=1,
                                learning_rate_start=0.001,
                                summary_every_n_steps=None)

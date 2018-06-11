@@ -5,7 +5,6 @@ from .utils import regularizers
 from .utils import initializers
 from .utils import losses
 from .utils import training
-from .utils import training_utils
 from .utils import trainer
 from .utils import evaluator
 from .segmentation import fcn

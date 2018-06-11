@@ -97,7 +97,8 @@ def init_metrics(ph_y, predictions, total_loss):
     # metrics 相关
     mean_per_class_accuracy, _ = tf.metrics.mean_per_class_accuracy(ph_y, predictions, args.NUM_CLASSES,
                                                                     metrics_collections=[args.METRICS_COLLECTION],
-                                                                    updates_collections=[args.METRICS_UPDATE_OPS_COLLECTION],
+                                                                    updates_collections=[
+                                                                        args.METRICS_UPDATE_OPS_COLLECTION],
                                                                     name='mean_accuracy_per_class')
     mean_loss, _ = tf.metrics.mean(total_loss,
                                    metrics_collections=[args.METRICS_COLLECTION],
@@ -153,25 +154,25 @@ def main():
     val_summary_writer = tf.summary.FileWriter(args.VAL_LOGS_DIR, tf.get_default_graph())
 
     # hooks
-    train_dataset_hook = bob.training_utils.TrainDatasetFeedDictHook(train_dataset, ph_x, ph_y)
+    train_dataset_hook = bob.training.TrainDatasetFeedDictHook(train_dataset, ph_x, ph_y)
     evaluate_feed_dict = {
         ph_image_size: args.VAL_SINGLE_IMAGE_SIZE,
         ph_is_training: False,
     }
 
-    evaluate_fn = bob.training_utils.evaluate_on_single_scale(args.VAL_SINGLE_IMAGE_SIZE,
-                                                              ph_x, ph_y,
-                                                              evaluate_feed_dict,
-                                                              None,
-                                                              tf.get_collection(args.METRICS_RESET_OPS_COLLECTION),
-                                                              tf.get_collection(args.METRICS_UPDATE_OPS_COLLECTION),
-                                                              main_metric=main_metric)
-    validation_evaluate_hook = bob.training_utils.ValidationDatasetEvaluationHook(val_dataset,
-                                                                                  args.VAL_EVERY_N_STEPS,
-                                                                                  summary_op=merged_summary,
-                                                                                  summary_writer=val_summary_writer,
-                                                                                  saver_file_prefix=args.CKPT_FILE_PATH,
-                                                                                  evaluate_fn=evaluate_fn)
+    evaluate_fn = bob.training.evaluate_on_single_scale(args.VAL_SINGLE_IMAGE_SIZE,
+                                                        ph_x, ph_y,
+                                                        evaluate_feed_dict,
+                                                        None,
+                                                        tf.get_collection(args.METRICS_RESET_OPS_COLLECTION),
+                                                        tf.get_collection(args.METRICS_UPDATE_OPS_COLLECTION),
+                                                        main_metric=main_metric)
+    validation_evaluate_hook = bob.training.ValidationDatasetEvaluationHook(val_dataset,
+                                                                            args.VAL_EVERY_N_STEPS,
+                                                                            summary_op=merged_summary,
+                                                                            summary_writer=val_summary_writer,
+                                                                            saver_file_prefix=args.CKPT_FILE_PATH,
+                                                                            evaluate_fn=evaluate_fn)
     hooks = [train_dataset_hook, validation_evaluate_hook]
 
     # 训练
