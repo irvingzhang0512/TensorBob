@@ -3,7 +3,6 @@ import numpy as np
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 
-
 __all__ = ['Evaluator']
 
 
@@ -81,7 +80,7 @@ class Evaluator:
 
             # 进行评估
             for i in range(loop_number):
-                logging.debug('start evaluate no.%d loop' % (i+1))
+                logging.debug('start evaluate no.%d loop' % (i + 1))
 
                 # dataset 准备
                 reset_feed_dict = None
@@ -110,17 +109,24 @@ class Evaluator:
                                 labels = cur_y if labels is None else np.concatenate((labels, cur_y), axis=0)
                         else:
                             cur_x = dataset_res
-#                         logging.debug('cur_x.shape is {}'.format(cur_x.shape))
+                            if isinstance(cur_x, tuple):
+                                cur_x = cur_x[0]
+                        # logging.debug('len(cur_x) is {}'.format(len(cur_x)))
+                        # logging.debug('cur_x is {}'.format(cur_x))
+                        # logging.debug('cur_x.shape is {}'.format(cur_x.shape))
                         feed_dict[ph_x] = cur_x
                         cur_predictions = sess.run(predictions, feed_dict=feed_dict)
-#                         logging.debug(np.mean(np.equal(np.argmax(cur_predictions, axis=1), cur_y).astype(np.float32)))
                         cur_res = cur_predictions if cur_res is None else np.concatenate((cur_res, cur_predictions),
                                                                                          axis=0)
+                        logging.debug('already evaluating %d samples' % len(cur_res))
+                        # logging.debug('cur predictions is {}'.format(cur_predictions))
+                        # logging.debug(np.mean(np.equal(np.argmax(cur_predictions, axis=1), cur_y).astype(np.float32)))
+
                     except OutOfRangeError:
                         break
                 res = cur_res if res is None else res + cur_res
                 logging.debug('no.%d evalutaion finished.' % i)
         if self._with_labels:
-            return res/loop_number, labels
+            return res / loop_number, labels
         else:
-            return res/loop_number
+            return res / loop_number

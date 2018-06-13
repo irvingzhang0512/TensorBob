@@ -188,7 +188,10 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
         self._evaluate_every_n_steps = evaluate_every_n_steps
 
         # 验证集上的最优性能指标记录
-        self._best_val_metric = tf.get_variable(best_metric_var_name, [], tf.float32)
+        self._best_val_metric = tf.get_variable(best_metric_var_name,
+                                                shape=[],
+                                                dtype=tf.float32,
+                                                initializer=tf.zeros_initializer,)
         self._ph_best_val_metric = tf.placeholder(tf.float32, [])
         self._assign_best_val_metric_op = tf.assign(self._best_val_metric, self._ph_best_val_metric)
 

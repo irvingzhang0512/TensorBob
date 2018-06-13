@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.ops import control_flow_ops
+from tensorflow.python.platform import tf_logging as logging
 
 
 __all__ = ['norm_imagenet',
@@ -108,7 +109,7 @@ def random_crop_vgg(image,
     :param scope:
     :return:
     """
-    with tf.name_scope(scope, 'random_crop_vgg', [image, resize_min, resize_max, crop_height, crop_width]):
+    with tf.name_scope(scope, 'random_crop_vgg'):
         resize_length = tf.random_uniform(
             [], minval=resize_min, maxval=resize_max + 1, dtype=tf.int32)
         image = resize_smallest_size(image, resize_length, resize_length, True)
@@ -191,8 +192,8 @@ def resize_smallest_size(images,
         new_height = tf.to_int32(image_height * scale)
         new_width = tf.to_int32(image_width * scale)
     else:
-        new_width = tf.cond(width_scale < 1, lambda: image_width, lambda: image_width * width_scale)
-        new_height = tf.cond(height_scale < 1, lambda: image_height, lambda: image_height * height_scale)
+        new_width = tf.to_int32(tf.cond(width_scale < 1, lambda: image_width, lambda: image_width * width_scale))
+        new_height = tf.to_int32(tf.cond(height_scale < 1, lambda: image_height, lambda: image_height * height_scale))
     return tf.image.resize_images(images, [new_height, new_width])
 
 
