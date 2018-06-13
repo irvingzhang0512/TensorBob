@@ -1,4 +1,7 @@
 import tensorflow as tf
+from .variables import get_variables_to_restore, assign_from_checkpoint_fn
+from tensorflow.python.platform import tf_logging as logging
+from nets import nets_factory
 
 __all__ = ['learning_rate_exponential_decay',
            'learning_rate_steps_dict',
@@ -78,3 +81,38 @@ def learning_rate_val_evaluation(learning_rate_start):
                                  initializer=tf.constant_initializer(1.0),
                                  trainable=False)
         return tf.div(lr, shrink, 'learning_rate')
+
+
+def scaffold_pre_trained_model(pre_trained_model_path,
+                               vars_include_list=None,
+                               vars_exclude_list=None):
+    if pre_trained_model_path is None:
+        raise ValueError('pre-trained model path must not be None')
+
+    variables_to_restore = get_variables_to_restore(include=vars_include_list,
+                                                    exclude=vars_exclude_list)
+    logging.debug('restore %d variables' % len(variables_to_restore))
+    init_fn = assign_from_checkpoint_fn(pre_trained_model_path,
+                                        variables_to_restore,
+                                        ignore_missing_vars=True,
+                                        reshape_variables=True)
+
+    def new_init_fn(scaffold, session):
+        init_fn(session)
+
+    return tf.train.Scaffold(init_fn=new_init_fn)
+
+
+def model_from_slim_nets_factory(model_name,
+                                 inputs,
+                                 num_classes,
+                                 weight_decay,
+                                 is_training,
+                                 **kwargs):
+        network_fn = nets_factory.get_network_fn(model_name,
+                                                 num_classes=num_classes,
+                                                 weight_decay=weight_decay,
+                                                 is_training=is_training,
+                                                 )
+        return network_fn(images=inputs, **kwargs)
+

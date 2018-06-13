@@ -229,15 +229,18 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
                     saver_path = self._saver.save(sess, self._saver_file_prefix, global_step=cur_global_step)
                     logging.debug('saving model into {}'.format(saver_path))
                 if self._shrink_learning_rate:
+                    logging.debug('shrink_lr_cnt reset to 0')
                     self._shrink_lr_cnt = 0
             else:
                 if self._shrink_learning_rate:
                     self._shrink_lr_cnt = self._shrink_lr_cnt + 1
+                    logging.debug('shrink_lr_cnt add one {}'.format(self._shrink_lr_cnt))
                     if self._shrink_lr_cnt >= self._shrink_epochs:
                         logging.debug('shrink learning rate')
                         sess.run(self._shrink_lr_op)
                         self._shrink_lr_cnt = 0
-            logging.debug('best val metrics is %.4f' % cur_metric)
+                        logging.debug('shrink_lr_cnt reset to 0')
+            logging.debug('cur val metrics is %.4f and best val metrics is %.4f' % (cur_metric, best_val_metric))
 
 
 def evaluate_on_single_scale(scale,

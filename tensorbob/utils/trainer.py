@@ -2,6 +2,7 @@ import tensorflow as tf
 import os
 import numpy as np
 from tensorflow.python.platform import tf_logging as logging
+from .variables import get_variables_to_restore
 from .training import train, create_train_op, create_finetune_train_op, \
     TrainDatasetFeedDictHook, evaluate_on_single_scale, ValidationDatasetEvaluationHook
 from .trainer_utils import learning_rate_exponential_decay, learning_rate_val_evaluation, learning_rate_steps_dict
@@ -181,14 +182,17 @@ class Trainer:
 class BaseClassificationTrainer(Trainer):
     def __init__(self, num_classes=1000,
                  training_crop_size=224, val_crop_size=384,
-                 fine_tune_steps=None, fine_tune_var_list=None,
+                 fine_tune_steps=None,
+                 fine_tune_var_include=None,
+                 fine_tune_var_exclude=None,
                  **kwargs):
         # {
         #     'num_classes': 1000,
         #     'training_crop_size': 224,
         #     'val_crop_size': 384,
         #     'fine_tune_steps': None,
-        #     'fine_tune_var_list': None,
+        #     'fine_tune_var_include': None,
+        #     'fine_tune_var_exclude': None,
         #
         #     'batch_size': 32,
         #     'weight_decay': 0.00005,
@@ -221,9 +225,10 @@ class BaseClassificationTrainer(Trainer):
         self._val_crop_size = val_crop_size
         self._num_classes = num_classes
         self._fine_tune_steps = fine_tune_steps
-        self._fine_tune_var_list = fine_tune_var_list
-        if fine_tune_steps is not None and fine_tune_var_list is None:
-            raise ValueError('fine_tune_var_list must not be None if fine_tune_steps is not None.')
+        self._fine_tune_var_include = fine_tune_var_include
+        self._fine_tune_var_exclude = fine_tune_var_exclude
+        if fine_tune_steps is not None and fine_tune_var_include is None:
+            raise ValueError('fine_tune_var_include must not be None if fine_tune_steps is not None.')
 
     def _get_training_dataset(self):
         raise NotImplementedError
@@ -277,10 +282,10 @@ class BaseClassificationTrainer(Trainer):
                                    update_ops=tf.get_collection(tf.GraphKeys.UPDATE_OPS))
         train_op1 = create_train_op(total_loss, optimizer, global_step,
                                     update_ops=tf.get_collection(tf.GraphKeys.UPDATE_OPS),
-                                    variables_to_train=self._fine_tune_var_list)
+                                    variables_to_train=get_variables_to_restore(self._fine_tune_var_include,
+                                                                                self._fine_tune_var_exclude))
         train_op2 = create_train_op(total_loss, optimizer, global_step,
-                                    update_ops=tf.get_collection(tf.GraphKeys.UPDATE_OPS),
-                                    variables_to_train=self._fine_tune_var_list)
+                                    update_ops=tf.get_collection(tf.GraphKeys.UPDATE_OPS))
         return create_finetune_train_op(train_op1, train_op2, self._fine_tune_steps, global_step)
 
     def _get_train_feed_fn(self):
@@ -331,8 +336,6 @@ class BaseSegmentationTrainer(Trainer):
         #     'num_classes': 1000,
         #     'training_crop_size': 224,
         #     'val_crop_size': 384,
-        #     'fine_tune_steps': None,
-        #     'fine_tune_var_list': None,
         #
         #     'batch_size': 32,
         #     'weight_decay': 0.00005,

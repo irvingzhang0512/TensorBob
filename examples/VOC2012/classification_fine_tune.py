@@ -30,7 +30,7 @@ class VocClassificationFineTuneTrainer(bob.trainer.BaseClassificationTrainer):
             'crop_width': self._training_crop_size,
             'crop_height': self._training_crop_size,
         }
-        return bob.data.get_voc_classification_dataset(data=self._data_path,
+        return bob.data.get_voc_classification_dataset(data_path=self._data_path,
                                                        batch_size=self._batch_size,
                                                        **train_configs)
 
@@ -43,7 +43,7 @@ class VocClassificationFineTuneTrainer(bob.trainer.BaseClassificationTrainer):
             'image_height': self._val_crop_size,
         }
         return bob.data.get_voc_classification_dataset(mode='val',
-                                                       data=self._data_path,
+                                                       data_path=self._data_path,
                                                        batch_size=self._batch_size,
                                                        **val_configs)
 
@@ -90,10 +90,11 @@ class VocClassificationFineTuneTrainer(bob.trainer.BaseClassificationTrainer):
 
 
 if __name__ == '__main__':
-    t = VocClassificationFineTuneTrainer('/home/tensorflow05/data/VOC2012',
-                                         pre_trained_model_path='/home/tensorflow05/data/pre-trained/slim'
-                                                                '/vgg_16.ckpt',
+    t = VocClassificationFineTuneTrainer('/home/ubuntu/data/VOC2012/train/VOC2012',
+                                         pre_trained_model_path='/home/ubuntu/data/slim/vgg_16.ckpt',
 
+                                         fine_tune_steps=1000,
+                                         fine_tune_var_include=['vgg_16/fc8'],
                                          training_crop_size=224,
                                          val_crop_size=384,
 
@@ -104,7 +105,7 @@ if __name__ == '__main__':
 
                                          learning_rate_type=3,
                                          learning_rate_start=0.001,
-                                         lr_shrink_epochs=3,
+                                         lr_shrink_epochs=5,
                                          lr_shrink_by_number=10.0,
                                          )
     t.train()
