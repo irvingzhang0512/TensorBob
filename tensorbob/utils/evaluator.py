@@ -71,7 +71,7 @@ class Evaluator:
 
         with tf.Session() as sess:
             # restore vars
-            sess.run(tf.global_variables_initializer())
+            # sess.run(tf.global_variables_initializer())
             init_fn(sess)
 
             # 最终结果初始化
@@ -111,21 +111,21 @@ class Evaluator:
                             cur_x = dataset_res
                             if isinstance(cur_x, tuple):
                                 cur_x = cur_x[0]
-                        # logging.debug('len(cur_x) is {}'.format(len(cur_x)))
-                        # logging.debug('cur_x is {}'.format(cur_x))
-                        # logging.debug('cur_x.shape is {}'.format(cur_x.shape))
                         feed_dict[ph_x] = cur_x
                         cur_predictions = sess.run(predictions, feed_dict=feed_dict)
                         cur_res = cur_predictions if cur_res is None else np.concatenate((cur_res, cur_predictions),
                                                                                          axis=0)
                         logging.debug('already evaluating %d samples' % len(cur_res))
+                        # logging.debug('len(cur_x) is {}'.format(len(cur_x)))
+                        # logging.debug('cur_x is {}'.format(cur_x))
+                        # logging.debug('cur_x.shape is {}'.format(cur_x.shape))
                         # logging.debug('cur predictions is {}'.format(cur_predictions))
                         # logging.debug(np.mean(np.equal(np.argmax(cur_predictions, axis=1), cur_y).astype(np.float32)))
 
                     except OutOfRangeError:
                         break
                 res = cur_res if res is None else res + cur_res
-                logging.debug('no.%d evalutaion finished.' % i)
+                logging.debug('no.%d evalutaion finished.' % (i + 1))
         if self._with_labels:
             return res / loop_number, labels
         else:

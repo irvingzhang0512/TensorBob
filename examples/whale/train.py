@@ -9,7 +9,28 @@ import logging
 logger = logging.getLogger('tensorflow')
 logger.setLevel(logging.DEBUG)
 
-NUM_CLASSES = 4251
+NUM_CLASSES = 4251 - 1
+
+# DATA_PATH = '/home/tensorflow05/data/kaggle/humpback_whale_identification',
+DATA_PATH = '/home/ubuntu/data/kaggle/humpback'
+
+# resnet_v2_101, 1080ti
+# PRE_TRAINED_MODEL_PATH = '/home/ubuntu/data/slim/resnet_v2_101.ckpt'
+# FINE_TUNE_VAR_INCLUDE = ['resnet_v2_101/logits']
+# MODEL_VAR_INCLUDE = ['resnet_v2_101']
+# MODEL_VAR_EXCLUDE = ['resnet_v2_101/logits']
+# NET_KWARGS = {}
+# MODEL_NAME = 'resnet_v2_101'
+
+# inception resnet v2, 1080ti
+PRE_TRAINED_MODEL_PATH = '/home/ubuntu/data/slim/inception_resnet_v2_2016_08_30.ckpt'
+FINE_TUNE_VAR_INCLUDE = ['InceptionResnetV2/Logits']
+MODEL_VAR_INCLUDE = ['InceptionResnetV2']
+MODEL_VAR_EXCLUDE = ['InceptionResnetV2/Logits', 'InceptionResnetV2/AuxLogits']
+MODEL_NAME = 'inception_resnet_v2'
+NET_KWARGS = {'create_aux_logits': False, 
+              'dropout_keep_prob': 0.8,
+             }
 
 
 def get_train_val_paths_and_labels(data_root):
@@ -23,8 +44,11 @@ def get_train_val_paths_and_labels(data_root):
     val_paths = np.array([], dtype=np.string_)
     val_labels = np.array([], dtype=np.int32)
 
-    cur_id = 0
+    cur_id = -1
     for c, group in df.groupby("Id"):
+        if cur_id == -1:
+            cur_id += 1
+            continue
         labels_str_to_int[c] = cur_id
         images = group['Image'].values
         images = np.array([os.path.join(train_dir, image) for image in images])
@@ -33,7 +57,7 @@ def get_train_val_paths_and_labels(data_root):
 
         if len(images) != 1:
             images = images[1:]
-        while len(images) < 10:
+        while len(images) < 8:
             images = np.append(images, images)
 
         train_paths = np.append(train_paths, images)
@@ -50,22 +74,29 @@ def get_train_val_paths_and_labels(data_root):
 
 
 class WhaleTrainer(bob.trainer.BaseClassificationTrainer):
-    def __init__(self, data_root='D:\\PycharmProjects\\data\\kaggle\\humpback_whale_identification',
+    def __init__(self, data_root,
                  pre_trained_model_path=None,
                  **kwargs):
         # {
+        #     'num_classes': 1000,
         #     'training_crop_size': 224,
         #     'val_crop_size': 384,
         #     'fine_tune_steps': None,
-        #     'fine_tune_var_list': None,
+        #     'fine_tune_var_include': None,
+        #     'fine_tune_var_exclude': None,
         #
         #     'batch_size': 32,
         #     'weight_decay': 0.00005,
         #     'keep_prob': 0.5,
+        #     'leraning_rate_type': 1,
         #     'learning_rate_start': 0.001,
         #     'lr_decay_rate': 0.5,
         #     'lr_decay_steps': 40000 * 10,
         #     'lr_staircase': False,
+        #     'steps_to_lr_dict': None,
+        #     'min_lr': 0.000001,
+        #     'lr_shrink_epochs': 3,
+        #     'lr_shrink_by_number': 10.0,
         #     'step_ckpt_dir': './logs/ckpt/',
         #     'train_logs_dir': './logs/train/',
         #     'val_logs_dir': './logs/val/',
@@ -81,17 +112,15 @@ class WhaleTrainer(bob.trainer.BaseClassificationTrainer):
         #     'max_steps': None
         # }
         logger.debug('whale kwargs is {}'.format(kwargs))
-        super().__init__(num_classes=4251, **kwargs)
+        super().__init__(num_classes=NUM_CLASSES, **kwargs)
         self._pre_trained_model_path = pre_trained_model_path
         self._train_paths, self._train_labels, self._val_paths, self._val_labels, self._labels_str_to_int = get_train_val_paths_and_labels(
             data_root)
 
     def _get_scaffold(self):
         if self._pre_trained_model_path is not None:
-            # variables_to_restore = bob.variables.get_variables_to_restore(include=['InceptionV3'],
-            #                                                               exclude=['InceptionV3/Logits'])
-            variables_to_restore = bob.variables.get_variables_to_restore(include=['vgg_16'],
-                                                                          exclude=['vgg_16/fc8'])
+            variables_to_restore = bob.variables.get_variables_to_restore(include=MODEL_VAR_INCLUDE,
+                                                                          exclude=MODEL_VAR_EXCLUDE)
             logger.debug('restore %d variables' % len(variables_to_restore))
             init_fn = bob.variables.assign_from_checkpoint_fn(self._pre_trained_model_path,
                                                               variables_to_restore,
@@ -105,14 +134,14 @@ class WhaleTrainer(bob.trainer.BaseClassificationTrainer):
 
     def _get_training_dataset(self):
         train_configs = {
-            # 'norm_fn_first': bob.data.norm_zero_to_one,
-            # 'norm_fn_end': bob.data.norm_minus_one_to_one,
-            'norm_fn_first': bob.data.norm_imagenet,
-            'crop_type': bob.data.CropType.random_normal,
+            'norm_fn_first': bob.data.norm_zero_to_one,
+            'norm_fn_end': bob.data.norm_minus_one_to_one,
+            # 'norm_fn_first': bob.data.norm_imagenet,
+            'crop_type': bob.data.CropType.random_vgg,
             'crop_width': self._training_crop_size,
             'crop_height': self._training_crop_size,
-            'image_width': 384,
-            'image_height': 384,
+            'vgg_image_size_min': 300,
+            'vgg_image_size_max': 384,
             'random_flip_horizontal_flag': True,
         }
         images_config = bob.data.get_images_dataset_by_paths_config(self._train_paths, **train_configs)
@@ -126,9 +155,9 @@ class WhaleTrainer(bob.trainer.BaseClassificationTrainer):
 
     def _get_val_dataset(self):
         val_configs = {
-            # 'norm_fn_first': bob.data.norm_zero_to_one,
-            # 'norm_fn_end': bob.data.norm_minus_one_to_one,
-            'norm_fn_first': bob.data.norm_imagenet,
+            'norm_fn_first': bob.data.norm_zero_to_one,
+            'norm_fn_end': bob.data.norm_minus_one_to_one,
+            # 'norm_fn_first': bob.data.norm_imagenet,
             'image_width': self._val_crop_size,
             'image_height': self._val_crop_size,
         }
@@ -141,45 +170,40 @@ class WhaleTrainer(bob.trainer.BaseClassificationTrainer):
                                     repeat=False)
 
     def _get_model(self):
-        # network_fn = nets_factory.get_network_fn('inception_v3',
-        #                                          num_classes=self._num_classes,
-        #                                          weight_decay=self._weight_decay,
-        #                                          is_training=self._ph_is_training,
-        #                                          )
-        # return network_fn(images=tf.reshape(self._ph_x, [-1, self._ph_image_size, self._ph_image_size, 3]),
-        #                   dropout_keep_prob=self._keep_prob,
-        #                   global_pool=True,
-        #                   create_aux_logits=False
-        #                   )
-        network_fn = nets_factory.get_network_fn('vgg_16',
+        network_fn = nets_factory.get_network_fn(MODEL_NAME,
                                                  num_classes=self._num_classes,
                                                  weight_decay=self._weight_decay,
                                                  is_training=self._ph_is_training,
                                                  )
         return network_fn(images=tf.reshape(self._ph_x, [-1, self._ph_image_size, self._ph_image_size, 3]),
-                          dropout_keep_prob=self._keep_prob,
-                          global_pool=True,
-                          )
+                          **NET_KWARGS)
 
     def _get_optimizer(self):
-        return tf.train.AdamOptimizer(learning_rate=self._get_learning_rate())
+        return tf.train.MomentumOptimizer(learning_rate=self._get_learning_rate(), momentum=0.9)
 
 
 if __name__ == '__main__':
     whale = WhaleTrainer(
-        data_root='/home/ubuntu/data/kaggle/humpback',
-        # pre_trained_model_path='/home/tensorflow05/data/pre-trained/slim/inception_v3.ckpt',
-        pre_trained_model_path='/home/ubuntu/data/slim/vgg_16.ckpt',
-        training_crop_size=224,
-        best_val_ckpt_dir='./logs/best_val/',
+        data_root=DATA_PATH,
+        pre_trained_model_path=PRE_TRAINED_MODEL_PATH,
+
+        fine_tune_steps=1100*5,
+        fine_tune_var_include=FINE_TUNE_VAR_INCLUDE,
+
+        training_crop_size=299,
+        val_crop_size=299,
+
         logging_every_n_steps=100,
         summary_every_n_steps=100,
         save_every_n_steps=5000,
-        evaluate_every_n_steps=2000,
-        lr_decay_steps=2000 * 5,
-        lr_staircase=False,
-        learning_rate_start=0.0005,
-        keep_prob=0.8
+        evaluate_every_n_steps=1100,
+
+        learning_rate_type=3,
+        learning_rate_start=0.0001,
+        lr_shrink_epochs=5,
+        lr_shrink_by_number=10.0,
+
+        weight_decay=0.0005,
     )
     whale.train()
 
