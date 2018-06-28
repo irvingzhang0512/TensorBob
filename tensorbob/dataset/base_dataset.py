@@ -55,12 +55,12 @@ class BaseDataset:
             dataset = dataset.shuffle(shuffle_buffer_size)
         if prefetch_buffer_size:
             dataset = dataset.prefetch(prefetch_buffer_size)
-        self._dataset = dataset.batch(batch_size)
+        self.dataset = dataset.batch(batch_size)
 
         # 获取 dataset iterator 相关内容
-        self._iterator = self._dataset.make_initializable_iterator()
-        self._next_batch = self._iterator.get_next()
         self._iterator_init_flag = False
+        self.iterator = self.dataset.make_initializable_iterator()
+        self.next_batch = self.iterator.get_next()
 
     def get_next_batch(self, sess, feed_dict=None):
         """
@@ -72,13 +72,13 @@ class BaseDataset:
         if not self._iterator_init_flag:
             self.reset(sess, feed_dict)
         try:
-            return sess.run(self._next_batch)
+            return sess.run(self.next_batch)
         except OutOfRangeError:
             if self._repeat:
-                sess.run(self._iterator.initializer, feed_dict=feed_dict)
-                return sess.run(self._next_batch)
+                sess.run(self.iterator.initializer, feed_dict=feed_dict)
+                return sess.run(self.next_batch)
             raise
 
     def reset(self, sess, feed_dict=None):
-        sess.run(self._iterator.initializer, feed_dict=feed_dict)
+        sess.run(self.iterator.initializer, feed_dict=feed_dict)
         self._iterator_init_flag = True

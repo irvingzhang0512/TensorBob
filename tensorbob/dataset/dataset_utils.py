@@ -25,13 +25,25 @@ def get_dataset_by_config(dataset_config):
 
     if dataset_type == 0:
         # 通过 file_path 获取 dataset
-        return _get_images_path_dataset(dataset_config), len(dataset_config['src'])
+        try:
+            size = len(dataset_config['src'])
+        except:
+            size = None
+        return _get_images_path_dataset(dataset_config), size
     elif dataset_type == 1:
         # 通过分类标签获取 dataset
-        return _get_classification_labels_dataset(dataset_config), len(dataset_config['src'])
+        try:
+            size = len(dataset_config['src'])
+        except:
+            size = None
+        return _get_classification_labels_dataset(dataset_config), size
     elif dataset_type == 2:
         # 通过图像分割标签 获取dataset
-        return _get_segmentation_labels_dataset(dataset_config), len(dataset_config['src'])
+        try:
+            size = len(dataset_config['src'])
+        except:
+            size = None
+        return _get_segmentation_labels_dataset(dataset_config), size
     else:
         raise ValueError('unknown dataset type {}'.format(dataset_type))
 
@@ -231,7 +243,7 @@ def _get_classification_labels_dataset(dataset_config):
     :return:
     """
     src = dataset_config['src']
-    return tf.data.Dataset.from_tensor_slices(tf.constant(src))
+    return tf.data.Dataset.from_tensor_slices(src)
 
 
 ###################################### 获取 图像分割 标签 ##################################################
