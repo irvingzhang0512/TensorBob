@@ -32,12 +32,26 @@ def main(args):
 
     # fine-tune model
     if args.fine_tune_model_path is not None:
-        var_list = bob.variables.get_variables_to_restore(include=args.var_include_list,
-                                                          exclude=args.var_exclude_list)
-        init_fn = bob.variables.assign_from_checkpoint_fn(args.fine_tune_model_path,
-                                                          var_list=var_list,
-                                                          ignore_missing_vars=True,
-                                                          reshape_variables=False)
+        if args.model_name == 'nasnet_large':
+            ckpt_reader = tf.train.load_checkpoint(args.fine_tune_model_path)
+            variable_names = list(ckpt_reader.get_variable_to_shape_map().keys())
+            var_names_to_values = {}
+            for var in variable_names:
+                if var.find('final_layer') != -1:
+                    continue
+                var_name = 'nasnet/'+var
+                if not tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, var_name):
+                    continue
+                var_names_to_values[var_name] = ckpt_reader.get_tensor(var)
+            init_fn = bob.variables.assign_from_values_fn(var_names_to_values)
+            print('get to restore %d vars' % len(var_names_to_values))
+        else:
+            var_list = bob.variables.get_variables_to_restore(include=args.var_include_list,
+                                                              exclude=args.var_exclude_list)
+            init_fn = bob.variables.assign_from_checkpoint_fn(args.fine_tune_model_path,
+                                                              var_list=var_list,
+                                                              ignore_missing_vars=True,
+                                                              reshape_variables=False)
 
     # 构建计算图结束，开始训练/预测
 
@@ -114,6 +128,7 @@ def _evaluate(args, sess,
     train_labels = []
     for idx, number_of_images_for_one_class in enumerate(number_of_images_per_class):
         train_labels += [idx] * number_of_images_for_one_class
+    train_image_paths = train_image_paths[:len(train_labels)]
     assert len(train_labels) == len(train_image_paths)
 
     dataset.reset(sess,
@@ -230,7 +245,7 @@ def _get_triplet_samples(images_per_class, image_paths, image_labels,
                          number_of_images_per_class, max_number_of_triplets):
     print('start getting triplet samples...')
     triplets_samples = []
-    number_of_all_images = int(np.sum(number_of_images_per_class))
+    number_of_all_images = len(image_paths)
     cls_ids = np.arange(len(images_per_class))
     np.random.shuffle(cls_ids)
 
@@ -253,69 +268,6 @@ def _get_triplet_samples(images_per_class, image_paths, image_labels,
                                          ])
     print('finished getting triplet samples...')
     return np.array(triplets_samples)[:max_number_of_triplets]
-
-
-# def _get_triplet_samples_with_facenet(args, sess,
-#                                       dataset, ph_image_paths, ph_image_labels, ph_is_training,
-#                                       embeddings_tensor, images_batch, labels_batch,
-#                                       labels_int_to_str, images_per_class, image_paths, number_of_images_per_class, ):
-#     print('start getting triplet samples with facenet...')
-#     dataset.reset(sess, feed_dict={ph_image_paths: image_paths, ph_image_labels: np.arange(len(image_paths))})
-#     embedding_array = np.zeros([len(image_paths), args.embedding_size])
-#     print('start getting embeddings for every picture...')
-#     while True:
-#         try:
-#             cur_embeddings, cur_labels = sess.run([embeddings_tensor, labels_batch], feed_dict={
-#                 ph_is_training: False
-#             })
-#             embedding_array[cur_labels, :] = cur_embeddings
-#         except tf.errors.OutOfRangeError:
-#             break
-#     print('start selecting triplets...')
-#     triplets = _select_triplets_image_paths_with_facenet(embedding_array, image_paths,
-#                                                          len(images_per_class), number_of_images_per_class,
-#                                                          args.alpha)
-#     return np.array(triplets)
-#
-#
-# def _select_triplets_image_paths_with_facenet(embeddings, image_paths, number_of_class, number_of_images_per_class,
-#                                               alpha):
-#     """
-#     使用numpy操作
-#     :param embeddings: shape为[-1, embedding_size]，代表每张图片的embedding
-#     :param image_paths: shape与 embedding 相同，代表每张图片的image_paths
-#     :param number_of_class:  一共有多少个class
-#     :param number_of_images_per_class: 每个class分别有多少图片
-#     :param alpha:
-#     :return: 返回list，其中每个元素shape为(3,)，分别代表 anchor, positive, negative 对应的image_path
-#     """
-#     embedding_array_start_idx = 0
-#     triplets = []
-#     ids = np.arange(number_of_class)
-#     np.random.shuffle(ids)
-#
-#     for i in range(number_of_class):
-#         if i % 200 == 0:
-#             print('cur selecting no.%d class/%d.' % (i + 1, number_of_class))
-#             print('current triplets number is %d.' % len(triplets))
-#         if len(triplets) > 5000:
-#             break
-#         cur_class = ids[i]
-#         for j in range(1, number_of_images_per_class[cur_class]):
-#             anchor_idx = embedding_array_start_idx + j - 1
-#             neg_dists = np.sum(np.square(embeddings[anchor_idx] - embeddings), 1)
-#             for k in range(j, number_of_images_per_class[cur_class]):
-#                 positive_idx = embedding_array_start_idx + k
-#                 pos_dist = np.sum(np.square(embeddings[anchor_idx] - embeddings[positive_idx]))
-#                 neg_dists[
-#                 embedding_array_start_idx:embedding_array_start_idx + number_of_images_per_class[cur_class]] = np.NaN
-#                 all_neg = np.where(np.logical_and(neg_dists - pos_dist < alpha, pos_dist < neg_dists))[0]
-#                 number_of_negs = all_neg.shape[0]
-#                 if number_of_negs > 0:
-#                     negative_idx = all_neg[np.random.randint(number_of_negs)]
-#                     triplets.append((image_paths[anchor_idx], image_paths[positive_idx], image_paths[negative_idx]))
-#         embedding_array_start_idx += number_of_images_per_class[cur_class]
-#     return triplets
 
 
 def _get_train_op(args):
@@ -354,13 +306,21 @@ def _triplet_loss(embeddings, alpha):
 
 
 def _get_embeddings(images_batch, ph_is_training, args):
-    model_fn = nets_factory.get_network_fn(args.model_name, args.embedding_size, args.weight_decay, ph_is_training)
-    embeddings, _ = model_fn(images_batch,
-                             global_pool=True,
-                             dropout_keep_prob=args.dropout_keep_prob,
-                             create_aux_logits=False,
-                             )
-    embeddings = tf.nn.l2_normalize(embeddings, axis=1, name='embeddings')
+    if args.model_name == 'nasnet_large':
+        model_fn = nets_factory.get_network_fn(args.model_name, args.embedding_size, args.weight_decay, False)
+        with tf.variable_scope('nasnet'):
+            embeddings, _ = model_fn(images_batch)
+            embeddings = tf.nn.l2_normalize(embeddings, axis=1, name='embeddings')
+    else:
+        model_fn = nets_factory.get_network_fn(args.model_name, args.embedding_size, args.weight_decay, ph_is_training)
+        with tf.variable_scope('nasnet'):
+            embeddings, _ = model_fn(images_batch,
+                                     global_pool=True,
+                                     dropout_keep_prob=args.dropout_keep_prob,
+                                     create_aux_logits=False,
+                                     )
+            embeddings = tf.nn.l2_normalize(embeddings, axis=1, name='embeddings')
+
     return embeddings
 
 
@@ -380,8 +340,11 @@ def _get_train_input_data(csv_file_path, images_dir):
 
     df = pd.read_csv(csv_file_path)
     cur_id = -1
+    new_whale_images = []
     for c, group in df.groupby("Id"):
         if cur_id == -1:
+            new_whale_images = group['Image'].values
+            new_whale_images = [os.path.join(images_dir, image) for image in new_whale_images]
             cur_id += 1
             continue
         labels_int_to_str[cur_id] = c
@@ -393,6 +356,10 @@ def _get_train_input_data(csv_file_path, images_dir):
         number_of_images_per_class.append(len(images))
         images_per_class.append(images)
         cur_id += 1
+
+    # add new whale images
+    image_paths += new_whale_images
+    image_labels += [-1] * len(new_whale_images)
 
     return labels_int_to_str, images_per_class, image_paths, image_labels, number_of_images_per_class
 
@@ -418,14 +385,14 @@ def _parse_arguments(argv):
     parser.add_argument('--evaluation_algorithm', type=str, default="NearestNeighbors")
 
     # local input file
-    parser.add_argument('--train_csv_file_path', type=str,
-                        default="/home/tensorflow05/data/kaggle/humpback_whale_identification/train.csv")
-    parser.add_argument('--train_images_dir', type=str,
-                        default="/home/tensorflow05/data/kaggle/humpback_whale_identification/train")
-    parser.add_argument('--test_csv_file_path', type=str,
-                        default="/home/tensorflow05/data/kaggle/humpback_whale_identification/sample_submission.csv")
-    parser.add_argument('--test_images_dir', type=str,
-                        default="/home/tensorflow05/data/kaggle/humpback_whale_identification/test")
+    # parser.add_argument('--train_csv_file_path', type=str,
+    #                     default="/home/tensorflow05/data/kaggle/humpback_whale_identification/train.csv")
+    # parser.add_argument('--train_images_dir', type=str,
+    #                     default="/home/tensorflow05/data/kaggle/humpback_whale_identification/train")
+    # parser.add_argument('--test_csv_file_path', type=str,
+    #                     default="/home/tensorflow05/data/kaggle/humpback_whale_identification/sample_submission.csv")
+    # parser.add_argument('--test_images_dir', type=str,
+    #                     default="/home/tensorflow05/data/kaggle/humpback_whale_identification/test")
     # parser.add_argument('--train_csv_file_path', type=str,
     #                     default="/home/ubuntu/data/kaggle/humpback/train.csv")
     # parser.add_argument('--train_images_dir', type=str,
@@ -434,9 +401,17 @@ def _parse_arguments(argv):
     #                     default="/home/ubuntu/data/kaggle/humpback/sample_submission.csv")
     # parser.add_argument('--test_images_dir', type=str,
     #                     default="/home/ubuntu/data/kaggle/humpback/test")
+    parser.add_argument('--train_csv_file_path', type=str,
+                        default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\train.csv")
+    parser.add_argument('--train_images_dir', type=str,
+                        default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\train")
+    parser.add_argument('--test_csv_file_path', type=str,
+                        default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\sample_submission.csv")
+    parser.add_argument('--test_images_dir', type=str,
+                        default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\test")
 
     # training configs
-    parser.add_argument('--batch_size', type=int, default=30)
+    parser.add_argument('--batch_size', type=int, default=12)  # 必须是3的倍数
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--weight_decay', type=float, default=.0)
     parser.add_argument('--dropout_keep_prob', type=float, default=0.8)
@@ -453,29 +428,47 @@ def _parse_arguments(argv):
     parser.add_argument('--learning_rate_staircase', type=bool, default=False)
 
     # model
+    # vgg16
+    # parser.add_argument('--model_name', type=str, default='vgg_16')
     # parser.add_argument('--image_size', type=int, default=224)
     # parser.add_argument('--pre_trained_model_path', type=str,
     #                     default='/home/tensorflow05/data/pre-trained/slim/vgg_16.ckpt')
     # parser.add_argument('--var_include_list', type=list, default=['vgg_16'])
     # parser.add_argument('--var_exclude_list', type=list, default=['vgg_16/fc8'])
-    # parser.add_argument('--model_name', type=str, default='vgg_16')
 
-    parser.add_argument('--image_size', type=int, default=299)
-    parser.add_argument('--fine_tune_model_path', type=str,
-                        default='/home/tensorflow05/data/pre-trained/slim/inception_v3.ckpt')
+    # inception v3
+    # parser.add_argument('--model_name', type=str, default='inception_v3')
+    # parser.add_argument('--image_size', type=int, default=299)
     # parser.add_argument('--fine_tune_model_path', type=str,
-    #                     default='/home/ubuntu/data/slim/inception_v3.ckpt')
+    #                     default='/home/tensorflow05/data/pre-trained/slim/inception_v3.ckpt')
+    # parser.add_argument('--var_include_list', type=list, default=['InceptionV3'])
+    # parser.add_argument('--var_exclude_list', type=list, default=['InceptionV3/Logits'])
+
+    # nasnet
+    parser.add_argument('--model_name', type=str, default='nasnet_large')
+    parser.add_argument('--image_size', type=int, default=331)
+    parser.add_argument('--fine_tune_model_path', type=str,
+                        default="E:\\PycharmProjects\\data\\slim\\nasnet\\model.ckpt")
+    parser.add_argument('--pre_trained_model_path', type=str,
+                        default=None)
+
+    # inception resnet v2
+    # parser.add_argument('--image_size', type=int, default=299)
+    # parser.add_argument('--var_include_list', type=list, default=['InceptionResnetV2'])
+    # parser.add_argument('--var_exclude_list', type=list, default=['InceptionResnetV2/Logits'])
+    # parser.add_argument('--model_name', type=str, default='inception_resnet_v2')
+    # parser.add_argument('--fine_tune_model_path', type=str,
+    #                     default='/home/tensorflow05/data/pre-trained/slim/inception_resnet_v2_2016_08_30.ckpt')
+    # parser.add_argument('--pre_trained_model_path', type=str,
+    #                     default=None)
 
     # parser.add_argument('--fine_tune_model_path', type=str,
     #                     default=None)
-    parser.add_argument('--pre_trained_model_path', type=str,
-                        default=None)
-    parser.add_argument('--var_include_list', type=list, default=['InceptionV3'])
-    parser.add_argument('--var_exclude_list', type=list, default=['InceptionV3/Logits'])
-    parser.add_argument('--model_name', type=str, default='inception_v3')
+    # parser.add_argument('--pre_trained_model_path', type=str,
+    #                     default='./logs_with_new_whale_in_triplets/model.ckpt-9000')
 
     # logs
-    parser.add_argument('--logs_dir', type=str, default="./logs/", help='')
+    parser.add_argument('--logs_dir', type=str, default="./logs_nasnet/", help='')
 
     return parser.parse_args(argv)
 
