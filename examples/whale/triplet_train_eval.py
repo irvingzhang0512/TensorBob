@@ -204,8 +204,12 @@ def _get_evaluation_res_by_nearest_neighbors(train_embedding_array, test_embeddi
         if "new_whale" not in sample_classes:
             sample_result.append(("new_whale", 0))
         sample_result.sort(key=lambda x: x[1])
-        sample_result = sample_result[:5]
-        ids.append(" ".join([x[0] for x in sample_result]))
+        cur_cls_names = set()
+        for cur_sample_result in sample_result:
+            cur_cls_names.add(cur_sample_result[0])
+            if len(cur_cls_names) == 5:
+                break
+        ids.append(" ".join([x for x in cur_cls_names]))
 
     return ids
 
@@ -313,13 +317,12 @@ def _get_embeddings(images_batch, ph_is_training, args):
             embeddings = tf.nn.l2_normalize(embeddings, axis=1, name='embeddings')
     else:
         model_fn = nets_factory.get_network_fn(args.model_name, args.embedding_size, args.weight_decay, ph_is_training)
-        with tf.variable_scope('nasnet'):
-            embeddings, _ = model_fn(images_batch,
-                                     global_pool=True,
-                                     dropout_keep_prob=args.dropout_keep_prob,
-                                     create_aux_logits=False,
-                                     )
-            embeddings = tf.nn.l2_normalize(embeddings, axis=1, name='embeddings')
+        embeddings, _ = model_fn(images_batch,
+                                 global_pool=True,
+                                 dropout_keep_prob=args.dropout_keep_prob,
+                                 create_aux_logits=False,
+                                 )
+        embeddings = tf.nn.l2_normalize(embeddings, axis=1, name='embeddings')
 
     return embeddings
 
@@ -439,18 +442,20 @@ def _parse_arguments(argv):
     # inception v3
     # parser.add_argument('--model_name', type=str, default='inception_v3')
     # parser.add_argument('--image_size', type=int, default=299)
-    # parser.add_argument('--fine_tune_model_path', type=str,
-    #                     default='/home/tensorflow05/data/pre-trained/slim/inception_v3.ckpt')
     # parser.add_argument('--var_include_list', type=list, default=['InceptionV3'])
     # parser.add_argument('--var_exclude_list', type=list, default=['InceptionV3/Logits'])
+    # parser.add_argument('--fine_tune_model_path', type=str,
+    #                     default='/home/tensorflow05/data/pre-trained/slim/inception_v3.ckpt')
+    # parser.add_argument('--pre_trained_model_path', type=str,
+    #                     default=None)
 
     # nasnet
     parser.add_argument('--model_name', type=str, default='nasnet_large')
     parser.add_argument('--image_size', type=int, default=331)
-    parser.add_argument('--fine_tune_model_path', type=str,
-                        default="E:\\PycharmProjects\\data\\slim\\nasnet\\model.ckpt")
-    parser.add_argument('--pre_trained_model_path', type=str,
-                        default=None)
+    # parser.add_argument('--fine_tune_model_path', type=str,
+    #                     default="E:\\PycharmProjects\\data\\slim\\nasnet\\model.ckpt")
+    # parser.add_argument('--pre_trained_model_path', type=str,
+    #                     default=None)
 
     # inception resnet v2
     # parser.add_argument('--image_size', type=int, default=299)
@@ -462,10 +467,10 @@ def _parse_arguments(argv):
     # parser.add_argument('--pre_trained_model_path', type=str,
     #                     default=None)
 
-    # parser.add_argument('--fine_tune_model_path', type=str,
-    #                     default=None)
-    # parser.add_argument('--pre_trained_model_path', type=str,
-    #                     default='./logs_with_new_whale_in_triplets/model.ckpt-9000')
+    parser.add_argument('--fine_tune_model_path', type=str,
+                        default=None)
+    parser.add_argument('--pre_trained_model_path', type=str,
+                        default='./logs_nasnet/model.ckpt-12500')
 
     # logs
     parser.add_argument('--logs_dir', type=str, default="./logs_nasnet/", help='')
