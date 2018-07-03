@@ -6,6 +6,7 @@ import os
 import argparse
 import sys
 import pickle
+import time
 from nets import nets_factory
 from tensorflow.python.platform import tf_logging as logging
 
@@ -27,6 +28,7 @@ def main(args):
     # 搭建模型，并构建损失函数与train_op
     embeddings = _get_embeddings(images_batch, ph_is_training, args)
     triplet_loss = _triplet_loss(tf.reshape(embeddings, (-1, 3, args.embedding_size)), args.alpha)
+    global_step = tf.train.get_or_create_global_step()
     train_op = _get_train_op(args)
     summary_op = tf.summary.merge_all()
 
@@ -39,7 +41,7 @@ def main(args):
             for var in variable_names:
                 if var.find('final_layer') != -1:
                     continue
-                var_name = 'nasnet/'+var
+                var_name = 'nasnet/' + var
                 if not tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, var_name):
                     continue
                 var_names_to_values[var_name] = ckpt_reader.get_tensor(var)
@@ -90,9 +92,14 @@ def main(args):
                                                sess.graph)
         for i in range(args.epochs):
             # 获取实际训练数据
-            triplet_samples = _get_triplet_samples(images_per_class, train_image_paths,
-                                                   train_image_labels, number_of_images_per_class,
-                                                   args.triplets_per_epoch)
+            # triplet_samples = _get_random_triplet_samples(images_per_class, train_image_paths,
+            #                                               train_image_labels, number_of_images_per_class,
+            #                                               args.triplets_per_epoch)
+            triplet_samples = _get_hard_triplet_samples(args, sess,
+                                                        dataset, ph_image_paths, ph_image_labels, ph_is_training,
+                                                        embeddings, images_batch, labels_batch,
+                                                        labels_int_to_str, images_per_class, train_image_paths,
+                                                        number_of_images_per_class, )
             triplet_samples = triplet_samples.reshape(-1)
             print('triplets samples size(after reshape(-1)) is', triplet_samples.shape)
 
@@ -105,11 +112,11 @@ def main(args):
                 try:
                     j += 1
                     if j % 10 == 0:
-                        cur_loss, cur_triplet_loss, summary_string = sess.run([train_op, triplet_loss, summary_op],
-                                                                              feed_dict={ph_is_training: True})
-                        print('epoch %d, step %d, loss is %.4f, triplet_loss is %.4f' % (
-                            i + 1, j, cur_loss, cur_triplet_loss))
-                        summary_writer.add_summary(summary_string)
+                        cur_step, cur_loss, summary_string = sess.run([global_step, train_op, summary_op],
+                                                                      feed_dict={ph_is_training: True})
+                        print('epoch %d, step %d, global step %d, loss is %.4f' % (
+                            i + 1, j, cur_step, cur_loss))
+                        summary_writer.add_summary(summary_string, global_step=cur_step)
                     else:
                         sess.run(train_op, feed_dict={ph_is_training: True})
                 except tf.errors.OutOfRangeError:
@@ -125,6 +132,7 @@ def _evaluate(args, sess,
               test_image_paths, raw_test_file_names
               ):
     print('getting training embeddings...')
+    time_training = time.time()
     train_labels = []
     for idx, number_of_images_for_one_class in enumerate(number_of_images_per_class):
         train_labels += [idx] * number_of_images_for_one_class
@@ -144,6 +152,8 @@ def _evaluate(args, sess,
             break
     print('train embedding shape is', train_embedding_array.shape)
 
+    time_testing = time.time()
+    print('training vectors cost %d s' % (time_testing - time_training))
     print('getting test embeddings...')
     dataset.reset(sess, feed_dict={ph_image_paths: test_image_paths, ph_image_labels: np.arange(len(test_image_paths))})
     test_embedding_array = np.zeros([len(test_image_paths), args.embedding_size])
@@ -157,6 +167,8 @@ def _evaluate(args, sess,
             break
     print('test embedding shape is', test_embedding_array.shape)
 
+    time_classify = time.time()
+    print('testing vectors cost %d s' % (time_classify - time_testing))
     ids = []
     if args.evaluation_algorithm == 'SVM':
         ids = _get_evaluation_res_by_svm(train_embedding_array, test_embedding_array,
@@ -173,6 +185,7 @@ def _evaluate(args, sess,
         'Id': ids
     })
     csv.to_csv(file_name, index=False, columns=['Image', 'Id'])
+    print('classify cost %d s' % (time.time() - time_classify))
 
 
 def _get_evaluation_res_by_nearest_neighbors(train_embedding_array, test_embedding_array,
@@ -204,12 +217,8 @@ def _get_evaluation_res_by_nearest_neighbors(train_embedding_array, test_embeddi
         if "new_whale" not in sample_classes:
             sample_result.append(("new_whale", 0))
         sample_result.sort(key=lambda x: x[1])
-        cur_cls_names = set()
-        for cur_sample_result in sample_result:
-            cur_cls_names.add(cur_sample_result[0])
-            if len(cur_cls_names) == 5:
-                break
-        ids.append(" ".join([x for x in cur_cls_names]))
+        sample_result = sample_result[:5]
+        ids.append(" ".join([x[0] for x in sample_result]))
 
     return ids
 
@@ -245,8 +254,8 @@ def _get_evaluation_res_by_svm(train_embedding_array, test_embedding_array,
     return ids
 
 
-def _get_triplet_samples(images_per_class, image_paths, image_labels,
-                         number_of_images_per_class, max_number_of_triplets):
+def _get_random_triplet_samples(images_per_class, image_paths, image_labels,
+                                number_of_images_per_class, max_number_of_triplets):
     print('start getting triplet samples...')
     triplets_samples = []
     number_of_all_images = len(image_paths)
@@ -272,6 +281,73 @@ def _get_triplet_samples(images_per_class, image_paths, image_labels,
                                          ])
     print('finished getting triplet samples...')
     return np.array(triplets_samples)[:max_number_of_triplets]
+
+
+def _get_hard_triplet_samples(args, sess,
+                              dataset, ph_image_paths, ph_image_labels, ph_is_training,
+                              embeddings_tensor, images_batch, labels_batch,
+                              labels_int_to_str, images_per_class, image_paths, number_of_images_per_class, ):
+    print('start getting hard triplet samples...')
+    start_time = time.time()
+    dataset.reset(sess, feed_dict={ph_image_paths: image_paths, ph_image_labels: np.arange(len(image_paths))})
+    embedding_array = np.zeros([len(image_paths), args.embedding_size])
+    while True:
+        try:
+            cur_embeddings, cur_labels = sess.run([embeddings_tensor, labels_batch], feed_dict={
+                ph_is_training: False
+            })
+            embedding_array[cur_labels, :] = cur_embeddings
+        except tf.errors.OutOfRangeError:
+            break
+    embedding_time = time.time()
+    print('getting embeddings cost %d s' % (embedding_time - start_time))
+    print('start selecting triplets...')
+    triplets = _select_hard_triplet_image_paths(embedding_array, image_paths,
+                                                len(images_per_class), number_of_images_per_class,
+                                                args.alpha)
+    print('selecting hard triplets cost %d s' % (time.time() - embedding_time))
+    return np.array(triplets)
+
+
+def _select_hard_triplet_image_paths(embeddings, image_paths, number_of_class, number_of_images_per_class,
+                                     alpha):
+    """	
+    使用numpy操作	
+    :param embeddings: shape为[-1, embedding_size]，代表每张图片的embedding	
+    :param image_paths: 代表每张图片的image_paths
+    :param number_of_class:  一共有多少个class	
+    :param number_of_images_per_class: 每个class分别有多少图片	
+    :param alpha:	
+    :return: 返回list，其中每个元素shape为(3,)，分别代表 anchor, positive, negative 对应的image_path	
+    """
+    embedding_array_start_idx = 0
+    triplets = []
+    ids = np.arange(number_of_class)
+    # np.random.shuffle(ids)
+
+    for i in range(number_of_class):
+        if i % 200 == 0:
+            print('cur selecting no.%d class/%d.' % (i + 1, number_of_class))
+            print('current triplets number is %d.' % len(triplets))
+        # if len(triplets) > 5000:
+        #     break
+        cur_class = ids[i]
+        for j in range(1, number_of_images_per_class[cur_class]):
+            anchor_idx = embedding_array_start_idx + j - 1
+            neg_dists = np.sum(np.square(embeddings[anchor_idx] - embeddings), 1)
+            for k in range(j, number_of_images_per_class[cur_class]):
+                positive_idx = embedding_array_start_idx + k
+                pos_dist = np.sum(np.square(embeddings[anchor_idx] - embeddings[positive_idx]))
+                neg_dists[
+                embedding_array_start_idx:embedding_array_start_idx + number_of_images_per_class[cur_class]] = np.NaN
+                all_neg = np.where(pos_dist < neg_dists)[0]
+                # all_neg = np.where(pos_dist < neg_dists + alpha)[0]
+                number_of_negs = all_neg.shape[0]
+                if number_of_negs > 0:
+                    negative_idx = all_neg[np.random.randint(number_of_negs)]
+                    triplets.append((image_paths[anchor_idx], image_paths[positive_idx], image_paths[negative_idx]))
+        embedding_array_start_idx += number_of_images_per_class[cur_class]
+    return triplets
 
 
 def _get_train_op(args):
@@ -318,7 +394,7 @@ def _get_embeddings(images_batch, ph_is_training, args):
     else:
         model_fn = nets_factory.get_network_fn(args.model_name, args.embedding_size, args.weight_decay, ph_is_training)
         embeddings, _ = model_fn(images_batch,
-                                 global_pool=True,
+                                 # global_pool=True,
                                  dropout_keep_prob=args.dropout_keep_prob,
                                  create_aux_logits=False,
                                  )
@@ -391,30 +467,30 @@ def _parse_arguments(argv):
     # parser.add_argument('--train_csv_file_path', type=str,
     #                     default="/home/tensorflow05/data/kaggle/humpback_whale_identification/train.csv")
     # parser.add_argument('--train_images_dir', type=str,
-    #                     default="/home/tensorflow05/data/kaggle/humpback_whale_identification/train")
+    #                     default="/home/tensorflow05/data/kaggle/humpback_whale_identification/train_crop")
     # parser.add_argument('--test_csv_file_path', type=str,
     #                     default="/home/tensorflow05/data/kaggle/humpback_whale_identification/sample_submission.csv")
     # parser.add_argument('--test_images_dir', type=str,
-    #                     default="/home/tensorflow05/data/kaggle/humpback_whale_identification/test")
-    # parser.add_argument('--train_csv_file_path', type=str,
-    #                     default="/home/ubuntu/data/kaggle/humpback/train.csv")
-    # parser.add_argument('--train_images_dir', type=str,
-    #                     default="/home/ubuntu/data/kaggle/humpback/train")
-    # parser.add_argument('--test_csv_file_path', type=str,
-    #                     default="/home/ubuntu/data/kaggle/humpback/sample_submission.csv")
-    # parser.add_argument('--test_images_dir', type=str,
-    #                     default="/home/ubuntu/data/kaggle/humpback/test")
+    #                     default="/home/tensorflow05/data/kaggle/humpback_whale_identification/test_crop")
     parser.add_argument('--train_csv_file_path', type=str,
-                        default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\train.csv")
+                        default="/home/ubuntu/data/kaggle/humpback/train.csv")
     parser.add_argument('--train_images_dir', type=str,
-                        default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\train")
+                        default="/home/ubuntu/data/kaggle/humpback/train_crop")
     parser.add_argument('--test_csv_file_path', type=str,
-                        default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\sample_submission.csv")
+                        default="/home/ubuntu/data/kaggle/humpback/sample_submission.csv")
     parser.add_argument('--test_images_dir', type=str,
-                        default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\test")
+                        default="/home/ubuntu/data/kaggle/humpback/test_crop")
+    # parser.add_argument('--train_csv_file_path', type=str,
+    #                     default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\train.csv")
+    # parser.add_argument('--train_images_dir', type=str,
+    #                     default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\train")
+    # parser.add_argument('--test_csv_file_path', type=str,
+    #                     default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\sample_submission.csv")
+    # parser.add_argument('--test_images_dir', type=str,
+    #                     default="E:\\PycharmProjects\\data\kaggle\\humpback_whale_identification\\test")
 
     # training configs
-    parser.add_argument('--batch_size', type=int, default=12)  # 必须是3的倍数
+    parser.add_argument('--batch_size', type=int, default=15)  # 必须是3的倍数
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--weight_decay', type=float, default=.0)
     parser.add_argument('--dropout_keep_prob', type=float, default=0.8)
@@ -425,7 +501,7 @@ def _parse_arguments(argv):
     parser.add_argument('--embedding_size', type=int, default=1024)
 
     # learning rate
-    parser.add_argument('--learning_rate_start', type=float, default=0.00001)
+    parser.add_argument('--learning_rate_start', type=float, default=0.00002)
     parser.add_argument('--learning_rate_decay_steps', type=int, default=10000)
     parser.add_argument('--learning_rate_decay_rate', type=float, default=0.8)
     parser.add_argument('--learning_rate_staircase', type=bool, default=False)
@@ -454,6 +530,8 @@ def _parse_arguments(argv):
     parser.add_argument('--image_size', type=int, default=331)
     # parser.add_argument('--fine_tune_model_path', type=str,
     #                     default="E:\\PycharmProjects\\data\\slim\\nasnet\\model.ckpt")
+    # parser.add_argument('--fine_tune_model_path', type=str,
+    #                     default="/home/ubuntu/data/slim/nasnet/model.ckpt")
     # parser.add_argument('--pre_trained_model_path', type=str,
     #                     default=None)
 
@@ -464,16 +542,15 @@ def _parse_arguments(argv):
     # parser.add_argument('--model_name', type=str, default='inception_resnet_v2')
     # parser.add_argument('--fine_tune_model_path', type=str,
     #                     default='/home/tensorflow05/data/pre-trained/slim/inception_resnet_v2_2016_08_30.ckpt')
-    # parser.add_argument('--pre_trained_model_path', type=str,
-    #                     default=None)
+    # parser.add_argument('--pre_trained_model_path', type=str, default=None)
 
     parser.add_argument('--fine_tune_model_path', type=str,
                         default=None)
     parser.add_argument('--pre_trained_model_path', type=str,
-                        default='./logs_nasnet/model.ckpt-12500')
+                        default='./logs_nasnet_cropped/model.ckpt-10000')
 
     # logs
-    parser.add_argument('--logs_dir', type=str, default="./logs_nasnet/", help='')
+    parser.add_argument('--logs_dir', type=str, default="./logs_nasnet_cropped/", help='')
 
     return parser.parse_args(argv)
 
