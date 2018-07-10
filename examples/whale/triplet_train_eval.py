@@ -92,14 +92,18 @@ def main(args):
                                                sess.graph)
         for i in range(args.epochs):
             # 获取实际训练数据
-            # triplet_samples = _get_random_triplet_samples(images_per_class, train_image_paths,
-            #                                               train_image_labels, number_of_images_per_class,
-            #                                               args.triplets_per_epoch)
-            triplet_samples = _get_hard_triplet_samples(args, sess,
-                                                        dataset, ph_image_paths, ph_image_labels, ph_is_training,
-                                                        embeddings, images_batch, labels_batch,
-                                                        labels_int_to_str, images_per_class, train_image_paths,
-                                                        number_of_images_per_class, )
+            if args.triplet_select_mode == 'random':
+                triplet_samples = _get_random_triplet_samples(images_per_class, train_image_paths,
+                                                              train_image_labels, number_of_images_per_class,
+                                                              args.triplets_per_epoch)
+            elif args.triplet_select_mode == 'hard':
+                triplet_samples = _get_hard_triplet_samples(args, sess,
+                                                            dataset, ph_image_paths, ph_image_labels, ph_is_training,
+                                                            embeddings, images_batch, labels_batch,
+                                                            labels_int_to_str, images_per_class, train_image_paths,
+                                                            number_of_images_per_class, )
+            else:
+                raise ValueError('unknown triplet select mode {}'.format(args.triplet_select_mode))
             triplet_samples = triplet_samples.reshape(-1)
             print('triplets samples size(after reshape(-1)) is', triplet_samples.shape)
 
@@ -111,7 +115,7 @@ def main(args):
             while True:
                 try:
                     j += 1
-                    if j % 10 == 0:
+                    if j % 100 == 0:
                         cur_step, cur_loss, summary_string = sess.run([global_step, train_op, summary_op],
                                                                       feed_dict={ph_is_training: True})
                         print('epoch %d, step %d, global step %d, loss is %.4f' % (
@@ -311,14 +315,14 @@ def _get_hard_triplet_samples(args, sess,
 
 def _select_hard_triplet_image_paths(embeddings, image_paths, number_of_class, number_of_images_per_class,
                                      alpha):
-    """	
-    使用numpy操作	
-    :param embeddings: shape为[-1, embedding_size]，代表每张图片的embedding	
+    """
+    使用numpy操作
+    :param embeddings: shape为[-1, embedding_size]，代表每张图片的embedding
     :param image_paths: 代表每张图片的image_paths
-    :param number_of_class:  一共有多少个class	
-    :param number_of_images_per_class: 每个class分别有多少图片	
-    :param alpha:	
-    :return: 返回list，其中每个元素shape为(3,)，分别代表 anchor, positive, negative 对应的image_path	
+    :param number_of_class:  一共有多少个class
+    :param number_of_images_per_class: 每个class分别有多少图片
+    :param alpha:
+    :return: 返回list，其中每个元素shape为(3,)，分别代表 anchor, positive, negative 对应的image_path
     """
     embedding_array_start_idx = 0
     triplets = []
@@ -340,8 +344,7 @@ def _select_hard_triplet_image_paths(embeddings, image_paths, number_of_class, n
                 pos_dist = np.sum(np.square(embeddings[anchor_idx] - embeddings[positive_idx]))
                 neg_dists[
                 embedding_array_start_idx:embedding_array_start_idx + number_of_images_per_class[cur_class]] = np.NaN
-                all_neg = np.where(pos_dist < neg_dists)[0]
-                # all_neg = np.where(pos_dist < neg_dists + alpha)[0]
+                all_neg = np.where(neg_dists < pos_dist + alpha)[0]
                 number_of_negs = all_neg.shape[0]
                 if number_of_negs > 0:
                     negative_idx = all_neg[np.random.randint(number_of_negs)]
@@ -448,11 +451,13 @@ def _get_dataset(ph_image_paths, ph_image_labels, args):
     image_config_dict = {
         'norm_fn_first': bob.data.norm_zero_to_one,
         'norm_fn_end': bob.data.norm_minus_one_to_one,
-        'random_flip_horizontal_flag': True,
         'crop_type': bob.data.CropType.no_crop,
         'image_width': args.image_size,
         'image_height': args.image_size,
     }
+    if args.mode == 'train':
+        image_config_dict['random_flip_horizontal_flag'] = True
+        image_config_dict['random_distort_color_flag'] = True
     images_config = bob.data.get_images_dataset_by_paths_config(ph_image_paths, **image_config_dict)
     return bob.data.BaseDataset([images_config, labels_config], batch_size=args.batch_size)
 
@@ -462,6 +467,7 @@ def _parse_arguments(argv):
 
     parser.add_argument('--mode', type=str, default="train")
     parser.add_argument('--evaluation_algorithm', type=str, default="NearestNeighbors")
+    parser.add_argument('--triplet_select_mode', type=str, default="hard")
 
     # local input file
     # parser.add_argument('--train_csv_file_path', type=str,
@@ -498,7 +504,7 @@ def _parse_arguments(argv):
 
     # triplet configs
     parser.add_argument('--alpha', type=float, default=1.0)
-    parser.add_argument('--embedding_size', type=int, default=1024)
+    parser.add_argument('--embedding_size', type=int, default=2048)
 
     # learning rate
     parser.add_argument('--learning_rate_start', type=float, default=0.00002)
@@ -530,10 +536,10 @@ def _parse_arguments(argv):
     parser.add_argument('--image_size', type=int, default=331)
     # parser.add_argument('--fine_tune_model_path', type=str,
     #                     default="E:\\PycharmProjects\\data\\slim\\nasnet\\model.ckpt")
-    # parser.add_argument('--fine_tune_model_path', type=str,
-    #                     default="/home/ubuntu/data/slim/nasnet/model.ckpt")
-    # parser.add_argument('--pre_trained_model_path', type=str,
-    #                     default=None)
+#     parser.add_argument('--fine_tune_model_path', type=str,
+#                         default="/home/ubuntu/data/slim/nasnet/model.ckpt")
+#     parser.add_argument('--pre_trained_model_path', type=str,
+#                         default=None)
 
     # inception resnet v2
     # parser.add_argument('--image_size', type=int, default=299)
@@ -547,10 +553,10 @@ def _parse_arguments(argv):
     parser.add_argument('--fine_tune_model_path', type=str,
                         default=None)
     parser.add_argument('--pre_trained_model_path', type=str,
-                        default='./logs_nasnet_cropped/model.ckpt-10000')
+                        default='./logs_nasnet_2048_hard_samples/model.ckpt-33732')
 
     # logs
-    parser.add_argument('--logs_dir', type=str, default="./logs_nasnet_cropped/", help='')
+    parser.add_argument('--logs_dir', type=str, default="./logs_nasnet_2048_hard_samples/", help='')
 
     return parser.parse_args(argv)
 
