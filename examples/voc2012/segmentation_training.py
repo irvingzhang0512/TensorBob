@@ -104,7 +104,7 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
 
 
 if __name__ == '__main__':
-    t = VocSegmentationTrainer(data_path="/home/tensorflow05/data/VOC2012",
+    t = VocSegmentationTrainer(data_path="/home/tensorflow05/data/voc2012",
                                pre_trained_model_path='/home/tensorflow05/data/pre-trained/slim/vgg_16.ckpt',
                                logging_every_n_steps=1,
                                learning_rate_start=0.001,

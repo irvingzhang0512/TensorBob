@@ -14,7 +14,7 @@ ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 logger.addHandler(ch)
 
-# VOC2012 分类信息，共有20类
+# voc2012 分类信息，共有20类
 CLASSES = ['aeroplane', 'bicycle', 'bird', 'boat',
            'bottle', 'bus', 'car', 'cat', 'chair', 'cow', 'diningtable',
            'dog', 'horse', 'motorbike', 'person', 'pottedplant',
@@ -27,7 +27,7 @@ tf.flags.DEFINE_integer('BATCH_SIZE', 64, 'batch size')
 tf.flags.DEFINE_float('WEIGHT_DECAY', 0.00005, 'l2 loss')
 tf.flags.DEFINE_float('KEEP_PROB', 0.5, 'dropout layer')
 tf.flags.DEFINE_float('MOMENTUM', 0.9, 'optimizer momentum')
-tf.flags.DEFINE_string('VOC2012_ROOT', "/home/ubuntu/data/VOC2012/train/VOC2012", 'where to store logs')
+tf.flags.DEFINE_string('VOC2012_ROOT', "/home/ubuntu/data/voc2012/train/voc2012", 'where to store logs')
 tf.flags.DEFINE_integer('TRAIN_IMAGE_SIZE', 224, '')
 tf.flags.DEFINE_integer('VAL_IMAGE_SIZE', 384, '')
 tf.flags.DEFINE_integer('NUM_CLASSES', 20, '')
