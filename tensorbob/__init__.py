@@ -7,4 +7,4 @@ from .utils import losses
 from .utils import training
 from .utils import trainer
 from .utils import evaluator
-from .segmentation import fcn
+from .models import segmentation, classification

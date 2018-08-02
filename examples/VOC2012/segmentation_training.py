@@ -36,7 +36,7 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
         #     'evaluate_every_n_steps': 10000,
         #     'max_steps': None
         # }
-        super().__init__(num_classes=21, **kwargs)
+        super().__init__(**kwargs)
         self._data_path = data_path
         self._pre_trained_model_path = pre_trained_model_path
 
@@ -49,8 +49,8 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
         return bob.data.get_voc_segmentation_dataset(self._data_path,
                                                      'train',
                                                      batch_size=self._batch_size,
-                                                     label_image_height=224,
-                                                     label_image_width=224,
+                                                     label_image_height=train_configs['image_height'],
+                                                     label_image_width=train_configs['image_height'],
                                                      **train_configs
                                                      )
 
@@ -63,17 +63,18 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
         return bob.data.get_voc_segmentation_dataset(self._data_path,
                                                      'val',
                                                      batch_size=self._batch_size,
-                                                     label_image_height=224,
-                                                     label_image_width=224,
+                                                     label_image_height=val_configs['image_height'],
+                                                     label_image_width=val_configs['image_height'],
                                                      **val_configs
                                                      )
 
     def _get_model(self):
-        logits = bob.fcn.vgg16_fcn_8s(tf.reshape(self._ph_x, [-1, self._ph_image_size, self._ph_image_size, 3]),
-                                      self._num_classes,
-                                      self._ph_is_training,
-                                      self._keep_prob,
-                                      self._weight_decay)
+        logits = bob.segmentation.vgg16_fcn_8s(
+            tf.reshape(self._ph_x, [-1, self._ph_image_size, self._ph_image_size, 3]),
+            self._num_classes,
+            self._ph_is_training,
+            self._keep_prob,
+            self._weight_decay)
         return logits, None
 
     def _get_optimizer(self):
@@ -84,7 +85,8 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
             return None
 
         variables_to_restore = bob.variables.get_variables_to_restore(include=['vgg16_fcn_8s/vgg_16'],
-                                                                      exclude=['vgg16_fcn_8s/vgg_16/fc8'])
+                                                                      # exclude=['vgg16_fcn_8s/vgg_16/fc8'],
+                                                                      )
         var_dict = {}
         for var in variables_to_restore:
             var_name = var.name[var.name.find('/') + 1:var.name.find(':')]
