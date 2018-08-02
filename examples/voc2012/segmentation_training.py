@@ -36,7 +36,7 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
         #     'evaluate_every_n_steps': 10000,
         #     'max_steps': None
         # }
-        super().__init__(**kwargs)
+        super().__init__(num_classes=21, **kwargs)
         self._data_path = data_path
         self._pre_trained_model_path = pre_trained_model_path
 
@@ -69,7 +69,7 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
                                                      )
 
     def _get_model(self):
-        logits = bob.segmentation.vgg16_fcn_8s(
+        logits, _ = bob.segmentation.vgg16_fcn_8s(
             tf.reshape(self._ph_x, [-1, self._ph_image_size, self._ph_image_size, 3]),
             self._num_classes,
             self._ph_is_training,
@@ -106,9 +106,16 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
 
 
 if __name__ == '__main__':
-    t = VocSegmentationTrainer(data_path="/home/tensorflow05/data/voc2012",
+    logs_dir_name = 'logs_new'
+    t = VocSegmentationTrainer(data_path="/home/tensorflow05/data/VOCdevkit/VOC2012",
                                pre_trained_model_path='/home/tensorflow05/data/pre-trained/slim/vgg_16.ckpt',
-                               logging_every_n_steps=1,
-                               learning_rate_start=0.001,
-                               summary_every_n_steps=None)
+                               logging_every_n_steps=10,
+                               summary_every_n_steps=10,
+                               save_every_n_steps=500,
+                               learning_rate_start=0.0001,
+                               step_ckpt_dir='./'+logs_dir_name+'/ckpt/',
+                               train_logs_dir='./'+logs_dir_name+'/train/',
+                               val_logs_dir='./'+logs_dir_name+'/val/',
+                               best_val_ckpt_dir='./'+logs_dir_name+'/best_val/',
+                               )
     t.train()

@@ -388,54 +388,41 @@ class BaseSegmentationTrainer(Trainer):
         return tf.losses.get_total_loss()
 
     def _get_metrics(self, logits, total_loss):
-        predictions = tf.argmax(tf.nn.softmax(logits), axis=-1)
-
-        # loss
-        mean_loss, _ = tf.metrics.mean(total_loss,
-                                       metrics_collections=[self._metrics_collection],
-                                       updates_collections=[self._metrics_update_ops_collection],
-                                       name='mean_loss')
-        non_mean_loss = total_loss
-        loss = tf.cond(self._ph_use_mean_metrics,
-                       lambda: mean_loss,
-                       lambda: non_mean_loss,
-                       name='loss')
-        tf.summary.scalar('loss', loss)
-
-        # accuracy
-        mean_accuracy, _ = tf.metrics.accuracy(self._ph_y, predictions,
-                                               metrics_collections=[self._metrics_collection],
-                                               updates_collections=[self._metrics_update_ops_collection],
-                                               name='mean_accuracy')
-        non_mean_accuracy = tf.reduce_mean(tf.cast(tf.equal(self._ph_y, predictions), tf.float32))
-        accuracy = tf.cond(self._ph_use_mean_metrics,
-                           lambda: mean_accuracy,
-                           lambda: non_mean_accuracy,
-                           name='accuracy')
-        tf.summary.scalar('accuracy', accuracy)
-
-        # mean_iou
-        mean_miou, _ = tf.metrics.mean_iou(tf.reshape(self._ph_y, [-1, self._ph_image_size, self._ph_image_size]),
-                                           predictions, self._num_classes,
-                                           metrics_collections=[self._metrics_collection],
-                                           updates_collections=[self._metrics_update_ops_collection],
-                                           name='mean_miou'
-                                           )
-        non_mean_miou = compute_mean_iou('non_mean_miou',
-                                         tf.confusion_matrix(tf.reshape(self._ph_y, [-1]),
-                                                             tf.reshape(predictions, [-1]),
-                                                             self._num_classes))
-        mean_iou = tf.cond(self._ph_use_mean_metrics,
-                           lambda: mean_miou,
-                           lambda: non_mean_miou,
-                           name='mean_iou')
-        tf.summary.scalar('mean_iou', mean_iou)
-
+        predictions = tf.argmax(logits, axis=-1)
+        _, loss = tf.metrics.mean(total_loss,
+                                  metrics_collections=[self._metrics_collection],
+                                  updates_collections=[self._metrics_update_ops_collection],
+                                  name='loss')
+        _, accuracy = tf.metrics.accuracy(self._ph_y, predictions,
+                                          metrics_collections=[self._metrics_collection],
+                                          updates_collections=[self._metrics_update_ops_collection],
+                                          name='accuracy')
+        _, confused_matrix = tf.metrics.mean_iou(tf.reshape(self._ph_y, [-1]),
+                                                 tf.reshape(predictions, [-1]),
+                                                 self._num_classes,
+                                                 metrics_collections=[self._metrics_collection],
+                                                 updates_collections=[self._metrics_update_ops_collection],
+                                                 name='confused_matrix')
+        mean_iou = compute_mean_iou('mean_iou', confused_matrix)
         for metric in tf.get_collection(tf.GraphKeys.METRIC_VARIABLES):
             tf.add_to_collection(self._metrics_reset_ops_collection,
                                  tf.assign(metric, tf.zeros(metric.get_shape(), metric.dtype)))
+        with tf.control_dependencies(tf.get_collection(self._metrics_reset_ops_collection)):
+            after_reset_loss = tf.identity(loss)
+            after_reset_accuracy = tf.identity(accuracy)
+            after_reset_mean_iou = tf.identity(mean_iou)
+        final_loss, final_accuracy, final_mean_iou = tf.cond(self._ph_use_mean_metrics,
+                                                             lambda: [loss,
+                                                                      accuracy,
+                                                                      mean_iou],
+                                                             lambda: [after_reset_loss,
+                                                                      after_reset_accuracy,
+                                                                      after_reset_mean_iou])
+        tf.summary.scalar('mean_iou', final_mean_iou)
+        tf.summary.scalar('accuracy', final_accuracy)
+        tf.summary.scalar('loss', final_loss)
 
-        return [mean_iou, accuracy, loss]
+        return [final_mean_iou, final_accuracy, final_loss]
 
     def _get_train_op(self, total_loss, optimizer):
         global_step = tf.train.get_or_create_global_step()
