@@ -5,7 +5,7 @@ from nets import nets_factory
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
 
-DATA_PATH = '/home/ubuntu/data/VOC2012/train/VOC2012'
+DATA_PATH = '/home/ubuntu/data/voc2012/train/voc2012'
 
 # PRE_TRAINED_MODEL_PATH = '/home/ubuntu/data/slim/vgg_16.ckpt'
 # FINE_TUNE_VAR_INCLUDE = ['vgg_16/fc8']
