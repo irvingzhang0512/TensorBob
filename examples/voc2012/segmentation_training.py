@@ -6,7 +6,7 @@ logger = logging.getLogger('tensorflow')
 logger.setLevel(logging.DEBUG)
 
 
-class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
+class VocSegmentationTrainer(bob.training.trainer.BaseSegmentationTrainer):
     def __init__(self,
                  data_path,
                  pre_trained_model_path=None,
@@ -42,7 +42,7 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
 
     def _get_training_dataset(self):
         train_configs = {
-            'norm_fn_first': bob.data.norm_imagenet,
+            'norm_fn_first': bob.preprocessing.norm_imagenet,
             'image_width': 224,
             'image_height': 224,
         }
@@ -56,7 +56,7 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
 
     def _get_val_dataset(self):
         val_configs = {
-            'norm_fn_first': bob.data.norm_imagenet,
+            'norm_fn_first': bob.preprocessing.norm_imagenet,
             'image_width': 224,
             'image_height': 224,
         }
@@ -70,7 +70,7 @@ class VocSegmentationTrainer(bob.trainer.BaseSegmentationTrainer):
 
     def _get_model(self):
         logits, _ = bob.segmentation.vgg16_fcn_8s(
-            tf.reshape(self._ph_x, [-1, self._ph_image_size, self._ph_image_size, 3]),
+            self._x,
             self._num_classes,
             self._ph_is_training,
             self._keep_prob,

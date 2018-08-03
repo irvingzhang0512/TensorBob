@@ -1,5 +1,5 @@
 import tensorflow as tf
-from .variables import get_variables_to_restore, assign_from_checkpoint_fn
+from utils.variables import get_variables_to_restore, assign_from_checkpoint_fn
 from tensorflow.python.platform import tf_logging as logging
 from nets import nets_factory
 

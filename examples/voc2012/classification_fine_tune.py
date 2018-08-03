@@ -21,15 +21,15 @@ PRE_TRAINED_MODEL_PATH = '/home/ubuntu/data/slim/inception_v3.ckpt'
 FINE_TUNE_VAR_INCLUDE = ['InceptionV3/Logits']
 VARS_INCLUDE = ['InceptionV3']
 VARS_EXCLUDE = ['InceptionV3/Logits']
-NORM_FN_FIRST = bob.data.norm_zero_to_one
-NORM_FN_END = bob.data.norm_minus_one_to_one
+NORM_FN_FIRST = bob.preprocessing.norm_zero_to_one
+NORM_FN_END = bob.preprocessing.norm_minus_one_to_one
 MODEL_NAME = 'inception_v3'
 NET_KWARGS = {'create_aux_logits': False,
               'global_pool': True,
               'dropout_keep_prob': 0.8, }
 
 
-class VocClassificationFineTuneTrainer(bob.trainer.BaseClassificationTrainer):
+class VocClassificationFineTuneTrainer(bob.training.BaseClassificationTrainer):
     def __init__(self, data_path, pre_trained_model_path=None, **kwargs):
         super().__init__(num_classes=20, **kwargs)
         self._data_path = data_path
@@ -73,8 +73,7 @@ class VocClassificationFineTuneTrainer(bob.trainer.BaseClassificationTrainer):
                                                  weight_decay=self._weight_decay,
                                                  is_training=self._ph_is_training,
                                                  )
-        return network_fn(images=tf.reshape(self._ph_x, [-1, self._ph_image_size, self._ph_image_size, 3]),
-                          **NET_KWARGS)
+        return network_fn(images=self._x, **NET_KWARGS)
 
     def _get_optimizer(self):
         return tf.train.AdamOptimizer(self._get_learning_rate())
@@ -117,4 +116,3 @@ if __name__ == '__main__':
                                          lr_shrink_by_number=10.0,
                                          )
     t.train()
-

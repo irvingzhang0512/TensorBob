@@ -449,8 +449,8 @@ def _get_train_input_data(csv_file_path, images_dir):
 def _get_dataset(ph_image_paths, ph_image_labels, args):
     labels_config = bob.data.get_classification_labels_dataset_config(ph_image_labels)
     image_config_dict = {
-        'norm_fn_first': bob.data.norm_zero_to_one,
-        'norm_fn_end': bob.data.norm_minus_one_to_one,
+        'norm_fn_first': bob.preprocessing.norm_zero_to_one,
+        'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
         'crop_type': bob.data.CropType.no_crop,
         'image_width': args.image_size,
         'image_height': args.image_size,

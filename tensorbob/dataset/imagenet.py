@@ -10,10 +10,7 @@ DATA_PATH = "/home/tensorflow05/data/ILSVRC2012"
 IMAGE_DIRS = {"train": "ILSVRC2012_img_train",
               "val": "ILSVRC2012_img_val",
               "test": ""}
-LABEL_DIRS = {"train": "ILSVRC2012_bbox_train",
-              "val": "ILSVRC2012_bbox_val",
-              "test": "ILSVRC2012_bbox_test_dogs"}
-WNIDS_FILE = "imagenet_lsvrc_2015_synsets.txt"
+WNIDS_FILE_NAME = "imagenet_lsvrc_2015_synsets.txt"
 VAL_LABEL_FILE_NAME = "imagenet_2012_validation_synset_labels.txt"
 BROKEN_IMAGES_TRAIN = ['n02667093_4388.JPEG',
                        'n09246464_51105.JPEG',
@@ -35,16 +32,15 @@ BROKEN_IMAGES_TRAIN = ['n02667093_4388.JPEG',
                        'n09256479_1094.JPEG',
                        'n09256479_108.JPEG',
                        ]
-BROKEN_IMAGE_VAL = []
 
 
 def _get_wnids(data_path):
-    with open(os.path.join(data_path, WNIDS_FILE)) as f:
+    with open(os.path.join(data_path, WNIDS_FILE_NAME)) as f:
         wnids = f.readlines()
     return [wnid.replace('\n', '') for wnid in wnids]
 
 
-def _get_images_paths_and_labels(mode, data_path, labels_offset=0):
+def _get_images_paths_and_labels(mode, data_path, labels_offset):
     """
     获取imagenet中train/val数据集的所有图片路径已经对应的label
     :param mode:            选择是train还是val
@@ -76,8 +72,6 @@ def _get_images_paths_and_labels(mode, data_path, labels_offset=0):
         ground_truths = [label_str_to_num[label.strip()] for label in ground_truths]
         images = sorted(os.listdir(os.path.join(data_path, IMAGE_DIRS[mode])))
         for image, label in zip(images, ground_truths):
-            if image in BROKEN_IMAGE_VAL:
-                continue
             paths.append(os.path.join(data_path, IMAGE_DIRS[mode], image))
             labels.append(label)
     else:
@@ -92,6 +86,20 @@ def get_imagenet_classification_dataset(mode,
                                         prefetch_buffer_size=10000,
                                         labels_offset=0,
                                         **kwargs):
+    """
+    根据条件获取 BaseDataset 对象
+    请注意：图像分类名称与编号，通过 models/research/slim/datasets/imagenet_lsvrc_2015_synsets.txt 来确认
+    需要先下载该文件，并添加到 ImageNet2012 根目录下
+    文件地址：https://github.com/tensorflow/models/blob/master/research/slim/datasets/imagenet_lsvrc_2015_synsets.txt
+    :param mode:                    模式，train/val 二选一
+    :param batch_size:              Batch Size
+    :param data_path:               ImageNet2012 根目录
+    :param shuffle_buffer_size:     buffer的大小
+    :param prefetch_buffer_size:    prefetch的大小
+    :param labels_offset:           分类标签从几开始计算
+    :param kwargs:                  图像增强参数，具体可以参考 dataset_utils 中 get_images_dataset_by_paths_config 函数
+    :return:                        BaseDataset 对象
+    """
     paths, labels = _get_images_paths_and_labels(mode, data_path, labels_offset)
     images_config = get_images_dataset_by_paths_config(paths, **kwargs)
     labels_config = get_classification_labels_dataset_config(labels)
@@ -99,6 +107,7 @@ def get_imagenet_classification_dataset(mode,
     train_mode = True if mode == 'train' else False
     return BaseDataset(dataset_config,
                        batch_size=batch_size,
-                       shuffle=train_mode, shuffle_buffer_size=shuffle_buffer_size,
+                       shuffle=train_mode,
+                       shuffle_buffer_size=shuffle_buffer_size,
                        repeat=train_mode,
                        prefetch_buffer_size=prefetch_buffer_size)

@@ -2,7 +2,7 @@ import unittest
 import tensorflow as tf
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 
-from .preprocessing import norm_imagenet
+from utils.preprocessing import norm_imagenet
 from .voc2012 import get_voc_classification_dataset
 
 

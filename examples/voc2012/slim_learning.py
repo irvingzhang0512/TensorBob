@@ -1,6 +1,3 @@
-import sys
-
-sys.path.append("/home/ubuntu/bob/models/research/slim")
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import nets.vgg as vgg

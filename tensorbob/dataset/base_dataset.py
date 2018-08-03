@@ -1,84 +1,153 @@
 import tensorflow as tf
-from tensorflow.python.framework.errors_impl import OutOfRangeError
 from .dataset_utils import get_dataset_by_config
-
 
 __all__ = ['BaseDataset']
 
 
 class BaseDataset:
     """
-    基本的Dataset类型
     通过输入的 dataset_configs 等条件获取 tf.data.Dataset 实例
+    包装 tf.data.Dataset 实例，保存相关的 iterator, next_batch 等信息
     """
 
     def __init__(self, dataset_configs,
                  batch_size=32,
                  shuffle=False,
                  shuffle_buffer_size=None,
-                 repeat=False,
+                 repeat=1,
                  prefetch_buffer_size=None
                  ):
         """
         根据 dataset_configs 获取基本的 tf.data.Dataset实例
         再通过几个参数进一步设置 dataset。
 
-        :param dataset_configs: 获取基本 dataset 的配置文件，可以参考 dataset_utils。
-        :param batch_size:
-        :param shuffle: 是否需要打乱顺序
-        :param shuffle_buffer_size:  默认使用 dataset.size 作为参数
-        :param repeat: 是否需要进行重复
-        :param prefetch_buffer_size:  是否需要prefetch数据
+        :param dataset_configs:         list类型，元素为map，即基本 dataset 的配置文件，其他请参考 dataset_utils。
+        :param batch_size:              Batch Size
+        :param shuffle:                 是否需要打乱顺序
+        :param shuffle_buffer_size:     默认使用 dataset.size 作为参数
+        :param repeat:                  重复次数
+        :param prefetch_buffer_size:    prefetch参数，若为None则不进行 prefetch 操作
         """
         self._batch_size = batch_size
         self._shuffle = shuffle
         self._shuffle_buffer_size = shuffle_buffer_size
         self._repeat = repeat
-        self.size = None
+        self._size = None
 
+        # 根据输入的 dict 配置文件，获取一组 tf.data.Dataset 实例
         datasets = []
         for dataset_config in dataset_configs:
             if not isinstance(dataset_config, dict):
                 raise ValueError('dataset_config must be dict instead of {}'.format(type(dataset_config)))
             cur_dataset, cur_dataset_size = get_dataset_by_config(dataset_config)
             datasets.append(cur_dataset)
-            if self.size:
-                assert self.size == cur_dataset_size
+            if self._size:
+                assert self._size == cur_dataset_size
             else:
-                self.size = cur_dataset_size
+                self._size = cur_dataset_size
 
         # dataset 操作
         dataset = tf.data.Dataset.zip(tuple(datasets))
+        dataset = dataset.repeat(self._repeat)
         if shuffle:
             if shuffle_buffer_size is None:
                 shuffle_buffer_size = self.size
             dataset = dataset.shuffle(shuffle_buffer_size)
         if prefetch_buffer_size:
             dataset = dataset.prefetch(prefetch_buffer_size)
-        self.dataset = dataset.batch(batch_size)
+        self._tf_dataset = dataset.batch(batch_size)
 
-        # 获取 dataset iterator 相关内容
-        self._iterator_init_flag = False
-        self.iterator = self.dataset.make_initializable_iterator()
-        self.next_batch = self.iterator.get_next()
+        # dataset iterator 相关参数
+        self._iterator = self._tf_dataset.make_initializable_iterator()
+        self._next_batch = self._iterator.get_next()
 
-    def get_next_batch(self, sess, feed_dict=None):
-        """
-        获取数据，通过
-        :param sess:
-        :param feed_dict:
-        :return:
-        """
-        if not self._iterator_init_flag:
-            self.reset(sess, feed_dict)
-        try:
-            return sess.run(self.next_batch)
-        except OutOfRangeError:
-            if self._repeat:
-                sess.run(self.iterator.initializer, feed_dict=feed_dict)
-                return sess.run(self.next_batch)
-            raise
+    @property
+    def tf_dataset(self):
+        return self._tf_dataset
+
+    @property
+    def size(self):
+        return self._size
+
+    @property
+    def iterator(self):
+        return self._iterator
+
+    @property
+    def next_batch(self):
+        return self._next_batch
+
+    @property
+    def batch_size(self):
+        return self._batch_size
 
     def reset(self, sess, feed_dict=None):
         sess.run(self.iterator.initializer, feed_dict=feed_dict)
-        self._iterator_init_flag = True
+
+
+class MergedDatast:
+    def __init__(self, base_dataset_1, base_dataset_2):
+        if isinstance(base_dataset_1, tf.data.Dataset):
+            self._tf_dataset_1 = base_dataset_1
+            self._tf_dataset_1_iterator = self._tf_dataset_1.make_initializable_iterator()
+        elif isinstance(base_dataset_1, BaseDataset):
+            self._tf_dataset_1 = base_dataset_1.tf_dataset
+            self._tf_dataset_1_iterator = self._tf_dataset_1.iterator
+        else:
+            raise TypeError
+        if isinstance(base_dataset_2, tf.data.Dataset):
+            self._tf_dataset_2 = base_dataset_2
+            self._tf_dataset_2_iterator = self._tf_dataset_2.make_initializable_iterator()
+        elif isinstance(base_dataset_2, BaseDataset):
+            self._tf_dataset_2 = base_dataset_2.tf_dataset
+            self._tf_dataset_2_iterator = base_dataset_2.iterator
+        else:
+            raise TypeError
+
+        if self._tf_dataset_1.output_types != self._tf_dataset_2.output_types \
+                or self._tf_dataset_2.output_shapes != self._tf_dataset_2.output_shapes:
+            raise ValueError('Two datasets must have same output types and shapes.')
+
+        self._ph_handle = tf.placeholder(tf.string, shape=[])
+        self._iterator = tf.data.Iterator.from_string_handle(
+            self._ph_handle, self._tf_dataset_1.output_types, self._tf_dataset_1.output_shapes)
+
+        self._next_batch = self._iterator.get_next()
+        self._handle_strings = None
+
+    @property
+    def tf_dataset_1(self):
+        return self._tf_dataset_1
+
+    @property
+    def tf_dataset_1_iterator(self):
+        return self._tf_dataset_1_iterator
+
+    @property
+    def tf_dataset_2(self):
+        return self._tf_dataset_2
+
+    @property
+    def tf_dataset_2_iterator(self):
+        return self._tf_dataset_2_iterator
+
+    @property
+    def ph_handle(self):
+        return self._ph_handle
+
+    @property
+    def next_batch(self):
+        return self._next_batch
+
+    @property
+    def iterator(self):
+        return self._iterator
+
+    @property
+    def handle_strings(self):
+        return self._handle_strings
+
+    @handle_strings.setter
+    def handle_strings(self, sess):
+        self._handle_strings = sess.run([self._tf_dataset_1_iterator.string_handle(),
+                                         self._tf_dataset_2_iterator.string_handle()])

@@ -7,14 +7,14 @@ logger = logging.getLogger('tensorflow')
 logger.setLevel(logging.DEBUG)
 
 
-class ImageNetMobileNetTrainer(bob.trainer.BaseClassificationTrainer):
+class ImageNetMobileNetTrainer(bob.training.BaseClassificationTrainer):
     def __init__(self, **kwargs):
         super().__init__(val_crop_size=224, **kwargs)
 
     def _get_training_dataset(self):
         train_configs = {
-            'norm_fn_first': bob.data.norm_zero_to_one,
-            'norm_fn_end': bob.data.norm_minus_one_to_one,
+            'norm_fn_first': bob.preprocessing.norm_zero_to_one,
+            'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
             'random_flip_horizontal_flag': True,
             'random_distort_color_flag': True,
             'distort_color_fast_mode_flag': False,
@@ -33,8 +33,8 @@ class ImageNetMobileNetTrainer(bob.trainer.BaseClassificationTrainer):
 
     def _get_val_dataset(self):
         val_configs = {
-            'norm_fn_first': bob.data.norm_zero_to_one,
-            'norm_fn_end': bob.data.norm_minus_one_to_one,
+            'norm_fn_first': bob.preprocessing.norm_zero_to_one,
+            'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
             'crop_type': bob.data.CropType.no_crop,
             'image_width': self._val_crop_size,
             'image_height': self._val_crop_size,
@@ -50,7 +50,7 @@ class ImageNetMobileNetTrainer(bob.trainer.BaseClassificationTrainer):
                                                  weight_decay=self._weight_decay,
                                                  is_training=self._ph_is_training,
                                                  )
-        return network_fn(images=tf.reshape(self._ph_x, [-1, self._ph_image_size, self._ph_image_size, 3]))
+        return network_fn(images=self._x)
 
     def _get_optimizer(self):
         return tf.train.AdamOptimizer(learning_rate=self._get_learning_rate())

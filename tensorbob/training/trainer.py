@@ -1,10 +1,9 @@
 import tensorflow as tf
 import os
-import numpy as np
 from tensorflow.python.platform import tf_logging as logging
-from .variables import get_variables_to_restore
+from utils.variables import get_variables_to_restore
 from .training import train, create_train_op, create_finetune_train_op, \
-    TrainDatasetFeedDictHook, evaluate_on_single_scale, ValidationDatasetEvaluationHook
+    evaluate_on_single_scale, ValidationDatasetEvaluationHook
 from .trainer_utils import learning_rate_exponential_decay, learning_rate_val_evaluation, learning_rate_steps_dict
 
 __all__ = ['Trainer', 'BaseClassificationTrainer', 'BaseSegmentationTrainer']
@@ -19,8 +18,9 @@ class Trainer:
                  steps_to_lr_dict=None, min_lr=0.000001,  # learning_rate_steps_dict
                  lr_shrink_epochs=3, lr_shrink_by_number=10.0,
 
-                 step_ckpt_dir='./logs/ckpt/', train_logs_dir='./logs/train/',
-                 val_logs_dir='./logs/val/', best_val_ckpt_dir='./logs/best_val/',
+                 base_logs_dir='./logs/',
+                 step_ckpt_dir='ckpt', train_logs_dir='train',
+                 val_logs_dir='val', best_val_ckpt_dir='best_val',
 
                  metrics_collection='val_metrics', metrics_update_ops_collection='update_ops',
                  metrics_reset_ops_collection='reset_ops', use_mean_metrics=False,
@@ -33,6 +33,7 @@ class Trainer:
         self._evaluate_every_n_steps = evaluate_every_n_steps
         self._max_steps = max_steps
 
+        self._base_logs_dir = base_logs_dir
         self._step_ckpt_dir = step_ckpt_dir
         self._train_logs_dir = train_logs_dir
         self._val_logs_dir = val_logs_dir
@@ -43,9 +44,6 @@ class Trainer:
         self._metrics_reset_ops_collection = metrics_reset_ops_collection
         self._use_mean_metrics = use_mean_metrics
 
-        self._ph_x = tf.placeholder(tf.float32, name='x')
-        self._ph_y = tf.placeholder(tf.int64, name='y')
-        self._ph_image_size = tf.placeholder(tf.int32, name='image_sizes')
         self._ph_is_training = tf.placeholder(tf.bool, name='is_training')
         self._ph_use_mean_metrics = tf.placeholder(tf.bool, name='use_mean_metrics')
 
@@ -66,11 +64,21 @@ class Trainer:
         self._train_dataset = None
         self._val_dataset = None
         self._main_metric = None
+        self._x = None
+        self._y = None
 
     def _get_training_dataset(self):
+        """
+        BaseDataset 实例，要求 next_batch 返回两个参数，分别是 数据（图像）和标签
+        :return:    BaseDataset
+        """
         raise NotImplementedError
 
     def _get_val_dataset(self):
+        """
+        BaseDataset 实例，要求 next_batch 返回两个参数，分别是 数据（图像）和标签
+        :return:    BaseDataset
+        """
         raise NotImplementedError
 
     def _get_optimizer(self):
@@ -80,9 +88,21 @@ class Trainer:
         raise NotImplementedError
 
     def _get_loss(self, logits):
+        """
+        根据模型输出的 logits 计算误差
+        :param logits:      _get_model 返回结果
+        :return:            误差
+        """
         raise NotImplementedError
 
     def _get_metrics(self, logits, total_loss):
+        """
+        训练时用到的各种性能指标，用于后续 logging hook
+        list对象，第一个 metrics 为其主要性能指标（如分类任务中的 accuracy，图像分割任务中的 mean IoU）
+        :param logits:          _get_model 返回结果
+        :param total_loss:      _get_loss 返回结果
+        :return:
+        """
         raise NotImplementedError
 
     def _get_hooks(self):
@@ -92,12 +112,28 @@ class Trainer:
         raise NotImplementedError
 
     def _get_scaffold(self):
+        """
+        主要用于导入 pre-trained model
+        :return:        tf.train.Scaffold 对象，默认可以是None
+        """
         raise NotImplementedError
 
     def _get_train_feed_fn(self):
+        """
+        返回一个函数，该函数的返回值就是每次训练时要用到的参数
+        如 is_training 等
+        :return:
+        """
         raise NotImplementedError
 
     def _get_learning_rate(self):
+        """
+        获取学习率，有三种模式
+        1：learning_rate_exponential_decay
+        2：到规定 steps 修改 learning rate，参考 learning_rate_steps_dict 函数。
+        3：根据验证集结果进行学习率衰减，参考 learning_rate_val_evaluation 函数。
+        :return:    学习率
+        """
         if self._learning_rate_type not in [1, 2, 3]:
             raise ValueError('learning_rate_type must in [1, 2, 3]')
         if self._learning_rate_type == 1:
@@ -133,6 +169,7 @@ class Trainer:
         # 获取数据集
         logging.debug('creating datasets')
         self._train_dataset = self._get_training_dataset()
+        self._x, self._y = self._train_dataset.next_batch
         self._val_dataset = self._get_val_dataset()
         logging.debug('successfully get datasets with size %d and %d' % (self._train_dataset.size,
                                                                          self._val_dataset.size))
@@ -168,7 +205,7 @@ class Trainer:
 
         logging.debug('training start')
         train(train_op,
-              self._step_ckpt_dir,
+              os.path.join(self._base_logs_dir, self._step_ckpt_dir),
               scaffold=scaffold,
               hooks=hooks,
               max_steps=self._max_steps,
@@ -206,10 +243,11 @@ class BaseClassificationTrainer(Trainer):
         #     'min_lr': 0.000001,
         #     'lr_shrink_epochs': 3,
         #     'lr_shrink_by_number': 10.0,
-        #     'step_ckpt_dir': './logs/ckpt/',
-        #     'train_logs_dir': './logs/train/',
-        #     'val_logs_dir': './logs/val/',
-        #     'best_val_ckpt_dir': './logs/best_val/',
+        #     'base_logs_dir': 'logs'
+        #     'step_ckpt_dir': 'ckpt',
+        #     'train_logs_dir': 'train',
+        #     'val_logs_dir': 'val',
+        #     'best_val_ckpt_dir': 'best_val',
         #     'metrics_collection': 'val_metrics',
         #     'metrics_update_ops_collection': 'update_ops',
         #     'metrics_reset_ops_collection': 'reset_ops',
@@ -231,26 +269,26 @@ class BaseClassificationTrainer(Trainer):
             raise ValueError('fine_tune_var_include must not be None if fine_tune_steps is not None.')
 
     def _get_training_dataset(self):
-        raise NotImplementedError
+        pass
 
     def _get_val_dataset(self):
-        raise NotImplementedError
-
-    def _get_model(self):
-        raise NotImplementedError
+        pass
 
     def _get_optimizer(self):
-        raise NotImplementedError
+        pass
+
+    def _get_model(self):
+        pass
 
     def _get_scaffold(self):
-        raise NotImplementedError
+        pass
 
     def _get_loss(self, logits):
-        tf.losses.sparse_softmax_cross_entropy(logits=logits, labels=self._ph_y)
+        tf.losses.sparse_softmax_cross_entropy(logits=logits, labels=self._y)
         return tf.losses.get_total_loss()
 
     def _get_metrics(self, logits, total_loss):
-        predictions = tf.argmax(tf.nn.softmax(logits), axis=1)
+        predictions = tf.argmax(logits, axis=1)
         mean_loss, _ = tf.metrics.mean(total_loss,
                                        metrics_collections=[self._metrics_collection],
                                        updates_collections=[self._metrics_update_ops_collection],
@@ -262,11 +300,11 @@ class BaseClassificationTrainer(Trainer):
                        name='loss')
         tf.summary.scalar('loss', loss)
 
-        mean_accuracy, _ = tf.metrics.accuracy(self._ph_y, predictions,
+        mean_accuracy, _ = tf.metrics.accuracy(self._y, predictions,
                                                metrics_collections=[self._metrics_collection],
                                                updates_collections=[self._metrics_update_ops_collection],
                                                name='mean_accuracy')
-        non_mean_accuracy = tf.reduce_mean(tf.cast(tf.equal(self._ph_y, predictions), tf.float32))
+        non_mean_accuracy = tf.reduce_mean(tf.cast(tf.equal(self._y, predictions), tf.float32))
         accuracy = tf.cond(self._ph_use_mean_metrics,
                            lambda: mean_accuracy,
                            lambda: non_mean_accuracy,
@@ -290,26 +328,19 @@ class BaseClassificationTrainer(Trainer):
 
     def _get_train_feed_fn(self):
         return {self._ph_is_training: True,
-                self._ph_image_size: self._training_crop_size,
                 self._ph_use_mean_metrics: self._use_mean_metrics}
 
     def _get_hooks(self):
-        train_dataset_hook = TrainDatasetFeedDictHook(self._train_dataset, self._ph_x, self._ph_y)
-
-        evaluate_feed_dict = {self._ph_image_size: self._val_crop_size,
-                              self._ph_is_training: False,
+        evaluate_feed_dict = {self._ph_is_training: False,
                               self._ph_use_mean_metrics: True}
-        evaluate_fn = evaluate_on_single_scale(self._val_crop_size, self._ph_x, self._ph_y,
-                                               evaluate_feed_dict, None,
+        evaluate_fn = evaluate_on_single_scale(self._x, self._y,
+                                               evaluate_feed_dict,
                                                tf.get_collection(self._metrics_reset_ops_collection),
                                                tf.get_collection(self._metrics_update_ops_collection),
                                                main_metric=self._main_metric)
         summary_feed_dict = {
-            self._ph_image_size: self._val_crop_size,
             self._ph_is_training: False,
             self._ph_use_mean_metrics: True,
-            self._ph_x: np.zeros([self._batch_size, self._val_crop_size, self._val_crop_size, 3]),
-            self._ph_y: np.zeros([self._batch_size])
         }
         val_summary_writer = tf.summary.FileWriter(self._val_logs_dir, tf.get_default_graph())
         val_set_shrink_lr_flag = (self._learning_rate_type == 3)
@@ -325,7 +356,7 @@ class BaseClassificationTrainer(Trainer):
                                                                    shrink_learning_rate=val_set_shrink_lr_flag,
                                                                    shrink_by_number=self._lr_shrink_by_number,
                                                                    shrink_epochs=self._lr_shrink_epochs)
-        return [train_dataset_hook, validation_evaluate_hook]
+        return [validation_evaluate_hook]
 
 
 class BaseSegmentationTrainer(Trainer):
@@ -349,10 +380,10 @@ class BaseSegmentationTrainer(Trainer):
         #     'min_lr': 0.000001,
         #     'lr_shrink_epochs': 3,
         #     'lr_shrink_by_number': 10.0,
-        #     'step_ckpt_dir': './logs/ckpt/',
-        #     'train_logs_dir': './logs/train/',
-        #     'val_logs_dir': './logs/val/',
-        #     'best_val_ckpt_dir': './logs/best_val/',
+        #     'base_logs_dir': 'logs'
+        #     'step_ckpt_dir': 'ckpt',
+        #     'train_logs_dir': 'train',
+        #     'val_logs_dir': 'val',
         #     'metrics_collection': 'val_metrics',
         #     'metrics_update_ops_collection': 'update_ops',
         #     'metrics_reset_ops_collection': 'reset_ops',
@@ -369,22 +400,22 @@ class BaseSegmentationTrainer(Trainer):
         self._num_classes = num_classes
 
     def _get_training_dataset(self):
-        raise NotImplementedError
+        pass
 
     def _get_val_dataset(self):
-        raise NotImplementedError
-
-    def _get_model(self):
-        raise NotImplementedError
+        pass
 
     def _get_optimizer(self):
-        raise NotImplementedError
+        pass
+
+    def _get_model(self):
+        pass
 
     def _get_scaffold(self):
-        raise NotImplementedError
+        pass
 
     def _get_loss(self, logits):
-        tf.losses.sparse_softmax_cross_entropy(logits=logits, labels=self._ph_y)
+        tf.losses.sparse_softmax_cross_entropy(logits=logits, labels=self._y)
         return tf.losses.get_total_loss()
 
     def _get_metrics(self, logits, total_loss):
@@ -393,17 +424,17 @@ class BaseSegmentationTrainer(Trainer):
                                   metrics_collections=[self._metrics_collection],
                                   updates_collections=[self._metrics_update_ops_collection],
                                   name='loss')
-        _, accuracy = tf.metrics.accuracy(self._ph_y, predictions,
+        _, accuracy = tf.metrics.accuracy(self._y, predictions,
                                           metrics_collections=[self._metrics_collection],
                                           updates_collections=[self._metrics_update_ops_collection],
                                           name='accuracy')
-        _, confused_matrix = tf.metrics.mean_iou(tf.reshape(self._ph_y, [-1]),
+        _, confused_matrix = tf.metrics.mean_iou(tf.reshape(self._y, [-1]),
                                                  tf.reshape(predictions, [-1]),
                                                  self._num_classes,
                                                  metrics_collections=[self._metrics_collection],
                                                  updates_collections=[self._metrics_update_ops_collection],
                                                  name='confused_matrix')
-        mean_iou = compute_mean_iou('mean_iou', confused_matrix)
+        mean_iou = compute_mean_iou_by_confusion_matrix('mean_iou', confused_matrix)
         for metric in tf.get_collection(tf.GraphKeys.METRIC_VARIABLES):
             tf.add_to_collection(self._metrics_reset_ops_collection,
                                  tf.assign(metric, tf.zeros(metric.get_shape(), metric.dtype)))
@@ -431,26 +462,19 @@ class BaseSegmentationTrainer(Trainer):
 
     def _get_train_feed_fn(self):
         return {self._ph_is_training: True,
-                self._ph_image_size: self._training_crop_size,
                 self._ph_use_mean_metrics: self._use_mean_metrics}
 
     def _get_hooks(self):
-        train_dataset_hook = TrainDatasetFeedDictHook(self._train_dataset, self._ph_x, self._ph_y)
-
-        evaluate_feed_dict = {self._ph_image_size: self._val_crop_size,
-                              self._ph_is_training: False,
+        evaluate_feed_dict = {self._ph_is_training: False,
                               self._ph_use_mean_metrics: True}
-        evaluate_fn = evaluate_on_single_scale(self._val_crop_size, self._ph_x, self._ph_y,
-                                               evaluate_feed_dict, None,
+        evaluate_fn = evaluate_on_single_scale(self._x, self._y,
+                                               evaluate_feed_dict,
                                                tf.get_collection(self._metrics_reset_ops_collection),
                                                tf.get_collection(self._metrics_update_ops_collection),
                                                main_metric=self._main_metric)
         summary_feed_dict = {
-            self._ph_image_size: self._val_crop_size,
             self._ph_is_training: False,
             self._ph_use_mean_metrics: True,
-            self._ph_x: np.zeros([self._batch_size, self._val_crop_size, self._val_crop_size, 3]),
-            self._ph_y: np.zeros([self._batch_size, self._val_crop_size, self._val_crop_size])
         }
         val_summary_writer = tf.summary.FileWriter(self._val_logs_dir, tf.get_default_graph())
         val_set_shrink_lr_flag = (self._learning_rate_type == 3)
@@ -466,11 +490,10 @@ class BaseSegmentationTrainer(Trainer):
                                                                    shrink_learning_rate=val_set_shrink_lr_flag,
                                                                    shrink_by_number=self._lr_shrink_by_number,
                                                                    shrink_epochs=self._lr_shrink_epochs)
-        return [train_dataset_hook, validation_evaluate_hook]
+        return [validation_evaluate_hook]
 
 
-def compute_mean_iou(name, total_cm):
-    """Compute the mean intersection-over-union via the confusion matrix."""
+def compute_mean_iou_by_confusion_matrix(name, total_cm):
     sum_over_row = tf.to_float(tf.reduce_sum(total_cm, 0))
     sum_over_col = tf.to_float(tf.reduce_sum(total_cm, 1))
     cm_diag = tf.to_float(tf.diag_part(total_cm))
@@ -495,3 +518,8 @@ def compute_mean_iou(name, total_cm):
         tf.greater(num_valid_entries, 0),
         tf.reduce_sum(iou, name=name) / num_valid_entries, 0)
     return result
+
+
+def compute_mean_iou(name, predictions, labels):
+    total_cm = tf.confusion_matrix(predictions=predictions, labels=labels)
+    return compute_mean_iou_by_confusion_matrix(name, total_cm)

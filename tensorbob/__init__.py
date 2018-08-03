@@ -1,10 +1,9 @@
-from . import data
-from tensorflow.contrib.slim import arg_scope
-from .utils import variables
-from .utils import regularizers
+from .utils import preprocessing
 from .utils import initializers
-from .utils import losses
-from .utils import training
-from .utils import trainer
-from .utils import evaluator
-from .models import segmentation, classification
+from .utils import regularizers
+from .utils import variables
+import training
+import models.segmentation as segmentation
+import models.classification as classification
+import dataset as data
+import evaluating

@@ -17,7 +17,6 @@ __all__ = ['SecondOrStepTimer',
            'ProfilerHook',
            'FinalOpsHook',
            'FeedFnHook',
-           'TrainDatasetFeedDictHook',
            'ValidationDatasetEvaluationHook',
            'evaluate_on_single_scale',
            'create_train_op',
@@ -40,6 +39,9 @@ def create_train_op_v2(total_loss,
                        aggregation_method=None,
                        colocate_gradients_with_ops=False,
                        check_numerics=True):
+    """
+    supoort update_ops after train_op
+    """
     train_op = create_train_op(total_loss=total_loss,
                                optimizer=optimizer,
                                global_step=global_step,
@@ -54,11 +56,15 @@ def create_train_op_v2(total_loss,
     if update_ops_after_loss is not None:
         final_train_op = with_dependencies([train_op], update_ops_after_loss)
     else:
-        final_train_op = tf.no_op()
+        final_train_op = train_op
     return final_train_op
 
 
 def create_finetune_train_op(train_op_stage_one, train_op_stage_two, stage_one_steps, global_step=None):
+    """
+    根据 global stesp 选择对应的train_op
+    global step <= stage_one_steps 时，选择 train_op_stage_one，否则选择 train_op_srage_two
+    """
     if train_op_stage_one is None or train_op_stage_two is None or stage_one_steps is None:
         raise ValueError('train_op_stage_one ,train_op_stage_two and stage_one_steps cannot be None!')
     if global_step is None:
@@ -78,6 +84,9 @@ def train(train_op,
           summary_writer=None, summary_op=None, summary_every_n_steps=None,  # SummarySaverHook
           saver=None, save_every_n_steps=None, checkpoint_basename="model.ckpt",  # CheckpointSaverHook
           ):
+    """
+    通过参数设置各种 hooks, 使用 tf.train.SingularMonitoredSession 训练
+    """
     if max_steps is not None and max_steps < 0:
         raise ValueError('max_steps must be positive but get {}'.format(max_steps))
 
@@ -128,27 +137,10 @@ def train(train_op,
             sess.run(train_op)
 
 
-class TrainDatasetFeedDictHook(tf.train.SessionRunHook):
-    """
-    通过 BaseDataset 实例设置训练数据
-    要求 BaseDataset 实例必须一次返回两个
-    """
-
-    def __init__(self, dataset,
-                 ph_x, ph_y):
-        self._dataset = dataset
-        self._ph_x = ph_x
-        self._ph_y = ph_y
-
-    def before_run(self, run_context):
-        sess = run_context.session
-        images, labels = self._dataset.get_next_batch(sess)
-        return tf.train.SessionRunArgs(
-            fetches=None, feed_dict={self._ph_x: images, self._ph_y: labels}
-        )
-
-
 class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
+    """
+    每经过若干 steps 就在验证集上计算一次性能指标
+    """
     def __init__(self,
                  dataset,
                  evaluate_every_n_steps,
@@ -246,32 +238,22 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
             logging.debug('cur val metrics is %.4f and best val metrics is %.4f' % (cur_metric, best_val_metric))
 
 
-def evaluate_on_single_scale(scale,
-                             ph_images,
+def evaluate_on_single_scale(ph_images,
                              ph_labels,
                              feed_dict,
-                             ph_val_image_size,
                              metrics_reset_ops,
                              metrics_update_ops,
                              main_metric):
-    if scale is None or scale < 1:
-        raise ValueError('scale must be positive int')
 
     def evaluate_fn(sess, dataset):
         if feed_dict is None:
             raise ValueError('feed_dict must not be None')
         print('evaluate val set...')
-        if ph_val_image_size is not None:
-            reset_feed_dict = {ph_val_image_size: scale}
-        else:
-            reset_feed_dict = None
-        dataset.reset(sess, feed_dict=reset_feed_dict)
+        dataset.reset(sess)
         sess.run(metrics_reset_ops)
         while True:
             try:
-                cur_images, cur_labels = dataset.get_next_batch(sess)
-                feed_dict[ph_images] = cur_images
-                feed_dict[ph_labels] = cur_labels
+                feed_dict[ph_images], feed_dict[ph_labels] = sess.run([ph_images, ph_labels])
                 sess.run(metrics_update_ops, feed_dict=feed_dict)
             except OutOfRangeError:
                 break

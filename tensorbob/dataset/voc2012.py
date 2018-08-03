@@ -6,7 +6,6 @@ from .base_dataset import BaseDataset
 
 __all__ = ['get_voc_classification_dataset', 'get_voc_segmentation_dataset']
 
-# VOC2012_ROOT_DIR = "/home/ubuntu/data/voc2012/train/voc2012"
 DATA_PATH = "/home/tensorflow05/data/voc2012"
 IMAGES_DIR_NAME = 'JPEGImages'
 CLASSIFICATION_CONFIG_DIR_NAME = os.path.join('ImageSets', 'Main')

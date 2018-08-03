@@ -12,14 +12,14 @@ DATA_PATH = '/home/tensorflow05/data/ILSVRC2012'
 PRE_TRAINED_MODEL_PATH = '/home/tensorflow05/data/pre-trained/slim/inception_v3.ckpt'
 NUM_CLASSES = 1001
 LABELS_OFFSET = NUM_CLASSES - 1000
-NORM_FN_FIRST = bob.data.norm_zero_to_one
-NORM_FN_END = bob.data.norm_minus_one_to_one
+NORM_FN_FIRST = bob.preprocessing.norm_zero_to_one
+NORM_FN_END = bob.preprocessing.norm_minus_one_to_one
 MODEL_NAME = 'inception_v3'
 PREDICTION_END_POINT_KEY = 'Predictions'
 VAR_INCLUDE = ['InceptionV3']
 
 
-class ImageNetEvaluator(bob.evaluator.Evaluator):
+class ImageNetEvaluator(bob.evaluating.Evaluator):
     def __init__(self, **kwargs):
         """
         batch_size=32,
