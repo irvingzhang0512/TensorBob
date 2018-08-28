@@ -2,21 +2,24 @@ import unittest
 import tensorflow as tf
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 
-from utils.preprocessing import norm_imagenet
-from .voc2012 import get_voc_classification_dataset
+from tensorbob.utils.preprocessing import norm_zero_to_one, norm_minus_one_to_one
+from tensorbob.dataset.voc2012 import get_voc_classification_dataset, get_voc_segmentation_merged_dataset
+from tensorbob.dataset.dataset_utils import CropType
 
 
 class Voc2012Test(unittest.TestCase):
-    @unittest.skip
-    def test_vgg_train(self):
+    def test_classification(self):
         dataset_config = {
-            'norm_fn': norm_imagenet,
-            'crop_width': 224,
-            'crop_height': 224,
-            'central_crop_flag': True,
-            'random_flip_horizontal_flag': True,
-            'random_flip_vertical_flag': True,
-            'multi_scale_training_list': [256, 512],
+            'norm_fn_first': norm_zero_to_one,
+            'norm_fn_end': norm_minus_one_to_one,
+            'random_flip_horizontal_flag': False,
+            'random_flip_vertical_flag': False,
+            'random_distort_color_flag': True,
+            'distort_color_fast_mode_flag': False,
+
+            'crop_type': CropType.no_crop,
+            'image_width': 224,
+            'image_height': 224,
         }
         dataset = get_voc_classification_dataset('train', 32, **dataset_config)
         with tf.Session() as sess:
@@ -32,27 +35,46 @@ class Voc2012Test(unittest.TestCase):
                     break
         self.assertEqual(total_cnt, dataset.size)
 
-    @unittest.skip
-    def test_val_multi_scale(self):
-        multi_scales = [256, 384, 512]
-        ph_image_size = tf.placeholder(tf.int32, [])
-        dataset_config = {
-            'norm_fn': norm_imagenet,
-            'image_width': ph_image_size,
-            'image_height': ph_image_size
+    def test_segmentation_dataset(self):
+        train_configs = {
+            'norm_fn_first': norm_zero_to_one,
+            'norm_fn_end': norm_minus_one_to_one,
+            'random_flip_horizontal_flag': False,
+            'random_flip_vertical_flag': False,
+            'random_distort_color_flag': True,
+            'distort_color_fast_mode_flag': False,
+
+            'crop_type': CropType.no_crop,
+            'image_width': 224,
+            'image_height': 224,
         }
-        dataset = get_voc_classification_dataset('val', 32, **dataset_config)
-        for multi_scale in multi_scales:
-            with tf.Session() as sess:
-                total_cnt = 0
-                dataset.reset(sess, feed_dict={ph_image_size: multi_scale})
-                while True:
-                    try:
-                        images, labels = dataset.get_next_batch(sess)
-                        total_cnt += images.shape[0]
-                        self.assertEqual(images.shape[1], multi_scale)
-                        self.assertEqual(images.shape[2], multi_scale)
-                        self.assertEqual(images.shape[3], 3)
-                    except OutOfRangeError:
-                        break
-            self.assertEqual(total_cnt, dataset.size)
+        val_configs = {
+            'norm_fn_first': norm_zero_to_one,
+            'norm_fn_end': norm_minus_one_to_one,
+            'crop_type': CropType.no_crop,
+            'image_width': 224,
+            'image_height': 224,
+        }
+        dataset = get_voc_segmentation_merged_dataset(
+            train_args=train_configs,
+            val_args=val_configs,
+            val_set_size=300,
+            batch_size=32,
+            shuffle_buffer_size=10000,
+            prefetch_buffer_size=10000,
+            repeat=10,
+            label_image_height=224, label_image_width=224,
+        )
+        with tf.Session() as sess:
+            dataset.init(sess)
+
+            for _ in range(10):
+                images, labels = dataset.get_next_batch(sess, 0)
+                print(images.shape, labels.shape)
+
+            sess.run(dataset.tf_dataset_2_iterator.initializer)
+            for _ in range(10):
+                images, labels = dataset.get_next_batch(sess, 1)
+                print(images.shape, labels.shape)
+
+        self.assertTrue(True, 'Always True')

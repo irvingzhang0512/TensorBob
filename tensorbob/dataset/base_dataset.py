@@ -1,11 +1,12 @@
 import tensorflow as tf
-from .dataset_utils import get_dataset_by_config
+from tensorbob.dataset.dataset_utils import get_dataset_by_config
 
-__all__ = ['BaseDataset']
+__all__ = ['BaseDataset', 'MergedDataset']
 
 
 class BaseDataset:
     """
+    单个 tf.data.Dataset 实例的封装
     通过输入的 dataset_configs 等条件获取 tf.data.Dataset 实例
     包装 tf.data.Dataset 实例，保存相关的 iterator, next_batch 等信息
     """
@@ -85,8 +86,18 @@ class BaseDataset:
         sess.run(self.iterator.initializer, feed_dict=feed_dict)
 
 
-class MergedDatast:
+class MergedDataset:
+    """
+    封装两个 tf.data.Dataset 实例
+    使用 feedable iterator 来处理这两个实例，主要用于 训练集/验证集 的使用
+    """
     def __init__(self, base_dataset_1, base_dataset_2):
+        """
+        输入两个数据集
+        要求：在使用前必须先调用
+        :param base_dataset_1:
+        :param base_dataset_2:
+        """
         if isinstance(base_dataset_1, tf.data.Dataset):
             self._tf_dataset_1 = base_dataset_1
             self._tf_dataset_1_iterator = self._tf_dataset_1.make_initializable_iterator()
@@ -147,7 +158,27 @@ class MergedDatast:
     def handle_strings(self):
         return self._handle_strings
 
-    @handle_strings.setter
-    def handle_strings(self, sess):
+    def init(self, sess):
+        """
+        获取数据前，必须初始化
+        内容：初始化handle string，以及tf_dataset_1的
+        :param sess:
+        """
         self._handle_strings = sess.run([self._tf_dataset_1_iterator.string_handle(),
                                          self._tf_dataset_2_iterator.string_handle()])
+        sess.run(self._tf_dataset_1_iterator.initializer)
+
+    def get_next_batch(self, sess, handle_index=None, handle_string=None):
+        if self._handle_strings is None:
+            raise ValueError('must set handle strings before calling this method.')
+        if handle_index is None and handle_string is None:
+            raise ValueError('handle_index or handle_string cannot both be None.')
+        if handle_string is not None and handle_index is not None:
+            raise ValueError('handle_string and handle_index cannot both be set.')
+        if handle_index is not None and handle_index not in [0, 1]:
+            raise ValueError('handle_index must be 0 or 1.')
+        if handle_string is not None and handle_string not in self._handle_strings:
+            raise ValueError('illegal handle_string is provided.')
+        cur_handle_string = handle_string if handle_string else self._handle_strings[handle_index]
+        return sess.run(self._next_batch, feed_dict={self._ph_handle: cur_handle_string})
+

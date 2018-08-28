@@ -1,6 +1,6 @@
 import tensorflow as tf
 from enum import Enum
-from ..utils.preprocessing import central_crop, random_crop, \
+from tensorbob.utils.preprocessing import central_crop, random_crop, \
     random_crop_inception, random_crop_vgg, random_distort_color
 
 

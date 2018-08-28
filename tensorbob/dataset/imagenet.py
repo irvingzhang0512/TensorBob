@@ -1,10 +1,9 @@
 import os
 import numpy as np
-from .dataset_utils import get_images_dataset_by_paths_config, get_classification_labels_dataset_config
-from .base_dataset import BaseDataset
+from tensorbob.dataset.dataset_utils import get_images_dataset_by_paths_config, get_classification_labels_dataset_config
+from tensorbob.dataset.base_dataset import BaseDataset, MergedDataset
 
-
-__all__ = ['get_imagenet_classification_dataset']
+__all__ = ['get_imagenet_classification_dataset', 'get_imagenet_classification_merged_dataset']
 
 DATA_PATH = "/home/tensorflow05/data/ILSVRC2012"
 IMAGE_DIRS = {"train": "ILSVRC2012_img_train",
@@ -82,15 +81,17 @@ def _get_images_paths_and_labels(mode, data_path, labels_offset):
 def get_imagenet_classification_dataset(mode,
                                         batch_size,
                                         data_path=DATA_PATH,
+                                        repeat=1,
                                         shuffle_buffer_size=10000,
                                         prefetch_buffer_size=10000,
                                         labels_offset=0,
                                         **kwargs):
     """
     根据条件获取 BaseDataset 对象
-    请注意：图像分类名称与编号，通过 models/research/slim/datasets/imagenet_lsvrc_2015_synsets.txt 来确认
+    请注意：图像分类名称与编号，通过 magenet_lsvrc_2015_synsets.txt 来确认
     需要先下载该文件，并添加到 ImageNet2012 根目录下
-    文件地址：https://github.com/tensorflow/models/blob/master/research/slim/datasets/imagenet_lsvrc_2015_synsets.txt
+    下载地址：https://github.com/tensorflow/models/blob/master/research/slim/datasets/imagenet_lsvrc_2015_synsets.txt
+    :param repeat:
     :param mode:                    模式，train/val 二选一
     :param batch_size:              Batch Size
     :param data_path:               ImageNet2012 根目录
@@ -109,5 +110,45 @@ def get_imagenet_classification_dataset(mode,
                        batch_size=batch_size,
                        shuffle=train_mode,
                        shuffle_buffer_size=shuffle_buffer_size,
-                       repeat=train_mode,
+                       repeat=repeat,
                        prefetch_buffer_size=prefetch_buffer_size)
+
+
+def get_imagenet_classification_merged_dataset(train_args,
+                                               val_args,
+                                               data_path=DATA_PATH,
+                                               batch_size=32,
+                                               repeat=10,
+                                               shuffle_buffer_size=10000,
+                                               prefetch_buffer_size=10000,
+                                               labels_offset=0):
+    """
+    根据条件获取 MergedDataset 对象
+    请注意：图像分类名称与编号，通过 magenet_lsvrc_2015_synsets.txt 来确认
+    需要先下载该文件，并添加到 ImageNet2012 根目录下
+    下载地址：https://github.com/tensorflow/models/blob/master/research/slim/datasets/imagenet_lsvrc_2015_synsets.txt
+    :param train_args:              训练集参数
+    :param val_args:                验证集参数
+    :param data_path:               ImageNet路径
+    :param batch_size:              batch size
+    :param repeat:                  训练集epoch数
+    :param shuffle_buffer_size:     训练集shuffle参数
+    :param prefetch_buffer_size:    训练集/验证集参数
+    :param labels_offset:           label offset
+    :return:                        MergedDataset
+    """
+    training_dataset = get_imagenet_classification_dataset('train',
+                                                           batch_size=batch_size,
+                                                           data_path=data_path,
+                                                           shuffle_buffer_size=shuffle_buffer_size,
+                                                           prefetch_buffer_size=prefetch_buffer_size,
+                                                           labels_offset=labels_offset,
+                                                           repeat=repeat,
+                                                           **train_args)
+    val_dataset = get_imagenet_classification_dataset('val',
+                                                      batch_size=batch_size,
+                                                      data_path=data_path,
+                                                      prefetch_buffer_size=prefetch_buffer_size,
+                                                      labels_offset=labels_offset,
+                                                      **val_args)
+    return MergedDataset(training_dataset, val_dataset)
