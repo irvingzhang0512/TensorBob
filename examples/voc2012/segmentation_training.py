@@ -1,121 +1,166 @@
 import tensorbob as bob
 import tensorflow as tf
-import logging
+from tensorflow.python.platform import tf_logging as logging
 
-logger = logging.getLogger('tensorflow')
-logger.setLevel(logging.DEBUG)
+logging.set_verbosity(logging.DEBUG)
+
+LEARNING_RATE = 0.0001
+
+IMAGE_SIZE = 256
+VAL_SIZE = 200
+BATCH_SIZE = 32
+EPOCHS = 100
+
+KEEP_PROB = 0.8
+WEIGHT_DECAY = 0.00005
+NUM_CLASSES = 21
 
 
-class VocSegmentationTrainer(bob.training.trainer.BaseSegmentationTrainer):
-    def __init__(self,
-                 data_path,
-                 pre_trained_model_path=None,
-                 **kwargs):
-        # {
-        #     'training_crop_size': 224,
-        #     'val_crop_size': 224,
-        #
-        #     'batch_size': 32,
-        #     'weight_decay': 0.00005,
-        #     'keep_prob': 0.5,
-        #     'learning_rate_start': 0.001,
-        #     'lr_decay_rate': 0.5,
-        #     'lr_decay_steps': 40000 * 10,
-        #     'lr_staircase': False,
-        #     'step_ckpt_dir': './logs/ckpt/',
-        #     'train_logs_dir': './logs/train/',
-        #     'val_logs_dir': './logs/val/',
-        #     'best_val_ckpt_dir': './logs/best_val/',
-        #     'metrics_collection': 'val_metrics',
-        #     'metrics_update_ops_collection': 'update_ops',
-        #     'metrics_reset_ops_collection': 'reset_ops',
-        #     'use_mean_metrics': False,
-        #     'logging_every_n_steps': 1000,
-        #     'summary_every_n_steps': 1000,
-        #     'save_every_n_steps': 1000,
-        #     'evaluate_every_n_steps': 10000,
-        #     'max_steps': None
-        # }
-        super().__init__(num_classes=21, **kwargs)
-        self._data_path = data_path
-        self._pre_trained_model_path = pre_trained_model_path
+def get_dataset():
+    # 获取数据集
+    train_configs = {
+        'norm_fn_first': bob.preprocessing.norm_zero_to_one,
+        'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
+        'random_distort_color_flag': True,
+        'crop_type': bob.data.CropType.no_crop,
+        'image_width': IMAGE_SIZE,
+        'image_height': IMAGE_SIZE,
+    }
+    val_configs = {
+        'norm_fn_first': bob.preprocessing.norm_zero_to_one,
+        'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
+        'crop_type': bob.data.CropType.no_crop,
+        'image_width': IMAGE_SIZE,
+        'image_height': IMAGE_SIZE,
+    }
+    return bob.data.get_voc_segmentation_merged_dataset(train_configs, val_configs,
+                                                        val_set_size=VAL_SIZE,
+                                                        batch_size=BATCH_SIZE,
+                                                        repeat=EPOCHS,
+                                                        label_image_height=IMAGE_SIZE,
+                                                        label_image_width=IMAGE_SIZE)
 
-    def _get_training_dataset(self):
-        train_configs = {
-            'norm_fn_first': bob.preprocessing.norm_imagenet,
-            'image_width': 224,
-            'image_height': 224,
-        }
-        return bob.data.get_voc_segmentation_dataset(self._data_path,
-                                                     'train',
-                                                     batch_size=self._batch_size,
-                                                     label_image_height=train_configs['image_height'],
-                                                     label_image_width=train_configs['image_height'],
-                                                     **train_configs
-                                                     )
 
-    def _get_val_dataset(self):
-        val_configs = {
-            'norm_fn_first': bob.preprocessing.norm_imagenet,
-            'image_width': 224,
-            'image_height': 224,
-        }
-        return bob.data.get_voc_segmentation_dataset(self._data_path,
-                                                     'val',
-                                                     batch_size=self._batch_size,
-                                                     label_image_height=val_configs['image_height'],
-                                                     label_image_width=val_configs['image_height'],
-                                                     **val_configs
-                                                     )
+def get_model(images, is_training):
+    return bob.segmentation.vgg16_fcn_8s(images,
+                                         num_classes=NUM_CLASSES,
+                                         is_training=is_training,
+                                         keep_prob=KEEP_PROB,
+                                         weight_decay=WEIGHT_DECAY)
 
-    def _get_model(self):
-        logits, _ = bob.segmentation.vgg16_fcn_8s(
-            self._x,
-            self._num_classes,
-            self._ph_is_training,
-            self._keep_prob,
-            self._weight_decay)
-        return logits, None
 
-    def _get_optimizer(self):
-        return tf.train.AdamOptimizer(learning_rate=self._get_learning_rate())
+def get_metrics(logits, labels, total_loss):
+    predictions = tf.argmax(logits, axis=-1)
+    summary_loss, loss = tf.metrics.mean(total_loss,
+                                         name='loss')
+    summary_accuracy, accuracy = tf.metrics.accuracy(labels, predictions,
+                                                     name='accuracy')
+    summary_mean_iou, confused_matrix = tf.metrics.mean_iou(tf.reshape(labels, [-1]),
+                                                            tf.reshape(predictions, [-1]),
+                                                            NUM_CLASSES,
+                                                            name='confused_matrix')
+    mean_iou = bob.metrics_utils.compute_mean_iou_by_confusion_matrix('mean_iou', confused_matrix)
 
-    def _get_scaffold(self):
-        if self._pre_trained_model_path is None:
-            return None
+    for metric in tf.get_collection(tf.GraphKeys.METRIC_VARIABLES):
+        tf.add_to_collection('RESET_OPS',
+                             tf.assign(metric, tf.zeros(metric.get_shape(), metric.dtype)))
+    with tf.control_dependencies(tf.get_collection('RESET_OPS')):
+        after_reset_loss = tf.identity(loss)
+        after_reset_accuracy = tf.identity(accuracy)
+        after_reset_mean_iou = tf.identity(mean_iou)
+    tf.summary.scalar('mean_iou', summary_loss)
+    tf.summary.scalar('accuracy', summary_accuracy)
+    tf.summary.scalar('loss', summary_mean_iou)
 
-        variables_to_restore = bob.variables.get_variables_to_restore(include=['vgg16_fcn_8s/vgg_16'],
-                                                                      # exclude=['vgg16_fcn_8s/vgg_16/fc8'],
-                                                                      )
-        var_dict = {}
-        for var in variables_to_restore:
-            var_name = var.name[var.name.find('/') + 1:var.name.find(':')]
-            var_dict[var_name] = var
-            print(var_name, var)
+    return [summary_mean_iou, summary_accuracy, summary_loss], \
+           [after_reset_mean_iou, after_reset_accuracy, after_reset_loss], \
+           [mean_iou, accuracy, loss]
+    # return [summary_accuracy, summary_loss], [final_accuracy, final_loss]
 
-        logger.debug('restore %d variables' % len(var_dict))
-        init_fn = bob.variables.assign_from_checkpoint_fn(self._pre_trained_model_path,
-                                                          var_dict,
-                                                          ignore_missing_vars=True,
-                                                          reshape_variables=True)
 
-        def new_init_fn(scaffold, session):
-            init_fn(session)
+def get_pre_trained_init_fn(pre_trained_model_path):
+    if pre_trained_model_path is None:
+        return None
 
-        return tf.train.Scaffold(init_fn=new_init_fn)
+    variables_to_restore = bob.variables.get_variables_to_restore(include=['vgg16_fcn_8s/vgg_16'],
+                                                                  # exclude=['vgg16_fcn_8s/vgg_16/fc8'],
+                                                                  )
+    var_dict = {}
+    for var in variables_to_restore:
+        var_name = var.name[var.name.find('/') + 1:var.name.find(':')]
+        var_dict[var_name] = var
+        logging.debug(var_name, var)
+
+    logging.debug('restore %d variables' % len(var_dict))
+    return bob.variables.assign_from_checkpoint_fn(pre_trained_model_path,
+                                                   var_dict,
+                                                   ignore_missing_vars=True,
+                                                   reshape_variables=True)
 
 
 if __name__ == '__main__':
-    logs_dir_name = 'logs_new'
-    t = VocSegmentationTrainer(data_path="/home/tensorflow05/data/VOCdevkit/VOC2012",
-                               pre_trained_model_path='/home/tensorflow05/data/pre-trained/slim/vgg_16.ckpt',
-                               logging_every_n_steps=10,
-                               summary_every_n_steps=10,
-                               save_every_n_steps=500,
-                               learning_rate_start=0.0001,
-                               step_ckpt_dir='./'+logs_dir_name+'/ckpt/',
-                               train_logs_dir='./'+logs_dir_name+'/train/',
-                               val_logs_dir='./'+logs_dir_name+'/val/',
-                               best_val_ckpt_dir='./'+logs_dir_name+'/best_val/',
-                               )
-    t.train()
+    # 各种参数
+    ph_is_training = tf.placeholder(tf.bool, name='is_training')
+    global_step = tf.train.get_or_create_global_step()
+
+    # 获取数据集
+    merged_dataset = get_dataset()
+
+    # 搭建网络
+    images, labels = merged_dataset.next_batch
+    logits, _ = get_model(images, ph_is_training)
+
+    # 获取train_op
+    tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
+    total_loss = tf.losses.get_total_loss()
+    optimizer = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE)
+    train_op = bob.training.create_train_op(total_loss,
+                                            optimizer,
+                                            global_step=global_step,
+                                            )
+
+    # 获取性能指标
+    summary_metrics, update_metrics, after_reset_metrics = get_metrics(logits, labels, total_loss)
+    with tf.control_dependencies(update_metrics):
+        summary_op = tf.identity(tf.summary.merge_all())
+
+    # 构建hooks
+    val_feed_dict = {ph_is_training: False}
+    validation_hook = bob.training.ValidationDatasetEvaluationHook(merged_dataset,
+                                                                   evaluate_every_n_steps=5000,
+
+                                                                   metrics_reset_ops=tf.get_collection('RESET_OPS'),
+                                                                   metrics_update_ops=update_metrics,
+                                                                   evaluating_feed_dict=val_feed_dict,
+
+                                                                   summary_op=summary_op,
+                                                                   summary_writer=tf.summary.FileWriter('./logs/val',
+                                                                                                        tf.get_default_graph()),
+                                                                   )
+    hooks = [validation_hook]
+
+
+    def init_fn(scaffold, session):
+        merged_dataset.init(session)
+        pre_trained_init_fn = get_pre_trained_init_fn(None)
+        if pre_trained_init_fn:
+            pre_trained_init_fn(session)
+
+
+    scaffold = tf.train.Scaffold(init_fn=init_fn)
+
+
+    def feed_fn():
+        return {merged_dataset.ph_handle: merged_dataset.handle_strings[0],
+                ph_is_training: True}
+
+
+    bob.training.train(train_op, './logs/',
+                       scaffold=scaffold,
+                       hooks=hooks,
+                       logging_tensors=after_reset_metrics,
+                       logging_every_n_steps=1,
+                       feed_fn=feed_fn,
+                       summary_every_n_steps=10,
+                       summary_op=summary_op,
+                       )

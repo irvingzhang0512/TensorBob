@@ -3,9 +3,10 @@ import os
 from tensorflow.python.platform import tf_logging as logging
 from tensorbob.utils.variables import get_variables_to_restore
 from tensorbob.training.training_utils import train, create_train_op, create_finetune_train_op, \
-    evaluate_on_single_scale, ValidationDatasetEvaluationHook
+    ValidationDatasetEvaluationHook
 from tensorbob.training.trainer_utils import learning_rate_exponential_decay, learning_rate_val_evaluation, \
     learning_rate_steps_dict
+from tensorbob.utils.metrics_utils import compute_mean_iou_by_confusion_matrix
 
 __all__ = ['Trainer', 'BaseClassificationTrainer', 'BaseSegmentationTrainer']
 
@@ -332,32 +333,7 @@ class BaseClassificationTrainer(Trainer):
                 self._ph_use_mean_metrics: self._use_mean_metrics}
 
     def _get_hooks(self):
-        evaluate_feed_dict = {self._ph_is_training: False,
-                              self._ph_use_mean_metrics: True}
-        evaluate_fn = evaluate_on_single_scale(self._x, self._y,
-                                               evaluate_feed_dict,
-                                               tf.get_collection(self._metrics_reset_ops_collection),
-                                               tf.get_collection(self._metrics_update_ops_collection),
-                                               main_metric=self._main_metric)
-        summary_feed_dict = {
-            self._ph_is_training: False,
-            self._ph_use_mean_metrics: True,
-        }
-        val_summary_writer = tf.summary.FileWriter(self._val_logs_dir, tf.get_default_graph())
-        val_set_shrink_lr_flag = (self._learning_rate_type == 3)
-        validation_evaluate_hook = ValidationDatasetEvaluationHook(self._val_dataset,
-                                                                   self._evaluate_every_n_steps,
-                                                                   summary_op=tf.summary.merge_all(),
-                                                                   summary_writer=val_summary_writer,
-                                                                   saver_file_prefix=os.path.join(
-                                                                       self._best_val_ckpt_dir,
-                                                                       'model.ckpt'),
-                                                                   evaluate_fn=evaluate_fn,
-                                                                   summary_feed_dict=summary_feed_dict,
-                                                                   shrink_learning_rate=val_set_shrink_lr_flag,
-                                                                   shrink_by_number=self._lr_shrink_by_number,
-                                                                   shrink_epochs=self._lr_shrink_epochs)
-        return [validation_evaluate_hook]
+        return []
 
 
 class BaseSegmentationTrainer(Trainer):
@@ -466,61 +442,4 @@ class BaseSegmentationTrainer(Trainer):
                 self._ph_use_mean_metrics: self._use_mean_metrics}
 
     def _get_hooks(self):
-        evaluate_feed_dict = {self._ph_is_training: False,
-                              self._ph_use_mean_metrics: True}
-        evaluate_fn = evaluate_on_single_scale(self._x, self._y,
-                                               evaluate_feed_dict,
-                                               tf.get_collection(self._metrics_reset_ops_collection),
-                                               tf.get_collection(self._metrics_update_ops_collection),
-                                               main_metric=self._main_metric)
-        summary_feed_dict = {
-            self._ph_is_training: False,
-            self._ph_use_mean_metrics: True,
-        }
-        val_summary_writer = tf.summary.FileWriter(self._val_logs_dir, tf.get_default_graph())
-        val_set_shrink_lr_flag = (self._learning_rate_type == 3)
-        validation_evaluate_hook = ValidationDatasetEvaluationHook(self._val_dataset,
-                                                                   self._evaluate_every_n_steps,
-                                                                   summary_op=tf.summary.merge_all(),
-                                                                   summary_writer=val_summary_writer,
-                                                                   saver_file_prefix=os.path.join(
-                                                                       self._best_val_ckpt_dir,
-                                                                       'model.ckpt'),
-                                                                   evaluate_fn=evaluate_fn,
-                                                                   summary_feed_dict=summary_feed_dict,
-                                                                   shrink_learning_rate=val_set_shrink_lr_flag,
-                                                                   shrink_by_number=self._lr_shrink_by_number,
-                                                                   shrink_epochs=self._lr_shrink_epochs)
-        return [validation_evaluate_hook]
-
-
-def compute_mean_iou_by_confusion_matrix(name, total_cm):
-    sum_over_row = tf.to_float(tf.reduce_sum(total_cm, 0))
-    sum_over_col = tf.to_float(tf.reduce_sum(total_cm, 1))
-    cm_diag = tf.to_float(tf.diag_part(total_cm))
-    denominator = sum_over_row + sum_over_col - cm_diag
-
-    # The mean is only computed over classes that appear in the
-    # label or prediction tensor. If the denominator is 0, we need to
-    # ignore the class.
-    num_valid_entries = tf.reduce_sum(
-        tf.cast(
-            tf.not_equal(denominator, 0), dtype=tf.float32))
-
-    # If the value of the denominator is 0, set it to 1 to avoid
-    # zero division.
-    denominator = tf.where(
-        tf.greater(denominator, 0), denominator,
-        tf.ones_like(denominator))
-    iou = tf.div(cm_diag, denominator)
-
-    # If the number of valid entries is 0 (no classes) we return 0.
-    result = tf.where(
-        tf.greater(num_valid_entries, 0),
-        tf.reduce_sum(iou, name=name) / num_valid_entries, 0)
-    return result
-
-
-def compute_mean_iou(name, predictions, labels):
-    total_cm = tf.confusion_matrix(predictions=predictions, labels=labels)
-    return compute_mean_iou_by_confusion_matrix(name, total_cm)
+        return []

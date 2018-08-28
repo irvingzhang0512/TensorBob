@@ -13,16 +13,16 @@ __all__ = ['SecondOrStepTimer',
            'NanLossDuringTrainingError',
            'NanTensorHook',
            'SummarySaverHook',
+           'SummarySaverHookV2',
            'GlobalStepWaiterHook',
            'ProfilerHook',
            'FinalOpsHook',
            'FeedFnHook',
-           'ValidationDatasetEvaluationHook',
-           'evaluate_on_single_scale',
            'create_train_op',
            'create_train_op_v2',
            'train',
-           'create_finetune_train_op']
+           'create_finetune_train_op',
+           'ValidationDatasetEvaluationHook', ]
 
 _USE_GLOBAL_STEP = 0
 
@@ -75,7 +75,7 @@ def create_finetune_train_op(train_op_stage_one, train_op_stage_two, stage_one_s
 
 
 def train(train_op,
-          log_dir,  # pre-trained model
+          logs_dir,  # pre-trained model
           scaffold=None,
           hooks=None,  # other hooks
           max_steps=None,  # StopAtStepHook
@@ -113,10 +113,11 @@ def train(train_op,
             raise ValueError('summary_every_n_steps must be positive but get {}'.format(summary_every_n_steps))
         if summary_op is None:
             summary_op = tf.summary.merge_all()
-        all_hooks.append(SummarySaverHook(save_steps=summary_every_n_steps,
-                                          output_dir=log_dir,
-                                          summary_writer=summary_writer,
-                                          summary_op=summary_op))
+        all_hooks.append(SummarySaverHookV2(save_steps=summary_every_n_steps,
+                                            output_dir=logs_dir,
+                                            summary_writer=summary_writer,
+                                            summary_op=summary_op))
+        logging.debug('add summary hook...')
 
     # save
     if save_every_n_steps is not None:
@@ -124,7 +125,7 @@ def train(train_op,
             saver = tf.train.Saver(max_to_keep=5)
         if save_every_n_steps < 0:
             raise ValueError('save_every_n_steps must be positive but get {}'.format(save_every_n_steps))
-        all_hooks.append(CheckpointSaverHook(log_dir,
+        all_hooks.append(CheckpointSaverHook(logs_dir,
                                              save_steps=save_every_n_steps,
                                              checkpoint_basename=checkpoint_basename,
                                              saver=saver,
@@ -132,7 +133,7 @@ def train(train_op,
 
     if hooks:
         all_hooks += hooks
-    with tf.train.SingularMonitoredSession(hooks=all_hooks, scaffold=scaffold, checkpoint_dir=log_dir) as sess:
+    with tf.train.SingularMonitoredSession(hooks=all_hooks, scaffold=scaffold, checkpoint_dir=logs_dir) as sess:
         while not sess.should_stop():
             sess.run(train_op)
 
@@ -141,23 +142,34 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
     """
     每经过若干 steps 就在验证集上计算一次性能指标
     """
+
     def __init__(self,
-                 dataset,
+                 merged_dataset,
                  evaluate_every_n_steps,
+
+                 # 预测模型参数相关
+                 metrics_reset_ops,
+                 metrics_update_ops,
+                 evaluating_feed_dict=None,
+
+                 # 训练结束后，save/log 相关
                  saver_file_prefix=None,
-                 summary_op=None, summary_writer=None,
-                 evaluate_fn=None,
                  best_metric_var_name='best_val_metric',
+                 summary_op=None, summary_writer=None,
                  summary_feed_dict=None,
+
+                 # 学习率衰减
                  shrink_learning_rate=False,
                  shrink_epochs=3,
                  shrink_by_number=10.0):
-        if dataset is None:
-            raise ValueError('dataset cannot be None!')
-        if evaluate_fn is None:
-            raise ValueError('evaluate_fn cannot be None!')
+        if merged_dataset is None:
+            raise ValueError('merged_dataset cannot be None!')
         if evaluate_every_n_steps is None:
             raise ValueError('evaluate_every_n_steps cannot be None!')
+        if metrics_update_ops is None:
+            raise ValueError('metrics_update_ops cannot be None!')
+        if metrics_reset_ops is None:
+            raise ValueError('metrics_reset_ops cannot be None!')
         if summary_op is not None and summary_writer is None:
             raise ValueError('summary_writer cannot be None when summary_op is not None!')
         if shrink_learning_rate and shrink_epochs < 1:
@@ -166,11 +178,12 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
         self._summary_feed_dict = summary_feed_dict
 
         # 在验证集上测试模型性能
-        self._dataset = dataset
+        self._merged_dataset = merged_dataset
 
         # 评估模型性能的函数
-        # 要求有两个输入，分别是(sess, dataset)
-        self._evaluate_fn = evaluate_fn
+        self._metrics_reset_ops = metrics_reset_ops
+        self._metrics_update_ops = metrics_update_ops
+        self._evaluating_feed_dict = evaluating_feed_dict
 
         # summary验证集上的metrics
         self._summary_op = summary_op
@@ -183,12 +196,13 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
         self._best_val_metric = tf.get_variable(best_metric_var_name,
                                                 shape=[],
                                                 dtype=tf.float32,
-                                                initializer=tf.zeros_initializer,)
+                                                initializer=tf.zeros_initializer, )
         self._ph_best_val_metric = tf.placeholder(tf.float32, [])
         self._assign_best_val_metric_op = tf.assign(self._best_val_metric, self._ph_best_val_metric)
 
         # 保存验证集上性能最好的模型
         self._saver_file_prefix = saver_file_prefix
+        self._saver = None
         if saver_file_prefix is not None:
             self._saver = tf.train.Saver(max_to_keep=2)
 
@@ -205,28 +219,59 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
                                             trainable=False)
                 self._shrink_lr_op = tf.assign(lr_shrink, tf.multiply(lr_shrink, shrink_by_number))
 
+    def _evaluate_on_val_set(self, sess):
+        """
+        在验证集上评估模型
+        """
+
+        # 重置性能指标，重置验证集
+        sess.run([self._metrics_reset_ops, self._merged_dataset.tf_dataset_2_iterator.initializer])
+
+        # 评估模型参数
+        if self._evaluating_feed_dict is None:
+            self._evaluating_feed_dict = {}
+        self._evaluating_feed_dict[self._merged_dataset.ph_handle] = self._merged_dataset.handle_strings[1]
+        cur_metrics = None
+        try:
+            while True:
+                cur_metrics = sess.run(self._metrics_update_ops, feed_dict=self._evaluating_feed_dict)
+                # logging.debug(self._evaluating_feed_dict, cur_metrics[:len(self._metrics_update_ops)])
+        except OutOfRangeError:
+            pass
+        return cur_metrics
+
     def after_run(self,
                   run_context,
                   run_values):
         sess = run_context.session
+
+        # 获取当前global step以及最佳性能指标
         cur_global_step, best_val_metric = sess.run([tf.train.get_or_create_global_step(), self._best_val_metric])
 
+        # 判断是否需要进行模型评估
         if cur_global_step != 0 and cur_global_step % self._evaluate_every_n_steps == 0:
-            cur_metric = self._evaluate_fn(sess,
-                                           self._dataset)
+            logging.info('start evaluating...')
+            # 评估模型，并获取当前性能指标
+            cur_metric = self._evaluate_on_val_set(sess)[0]
+
             if self._summary_op is not None and self._summary_writer is not None:
-                summary_string = sess.run(self._summary_op, feed_dict=self._summary_feed_dict)
+                summary_string = sess.run(self._summary_op)
                 self._summary_writer.add_summary(summary_string, cur_global_step)
+                logging.debug('add summary successfully...')
 
             if cur_metric > best_val_metric:
+                # 若当前性能指标由于最佳值，需要更新最佳值，并看情况是否需要保存模型
                 sess.run(self._assign_best_val_metric_op, feed_dict={self._ph_best_val_metric: cur_metric})
                 if self._saver:
                     saver_path = self._saver.save(sess, self._saver_file_prefix, global_step=cur_global_step)
                     logging.debug('saving model into {}'.format(saver_path))
+
+                # 学习率衰减
                 if self._shrink_learning_rate:
                     logging.debug('shrink_lr_cnt reset to 0')
                     self._shrink_lr_cnt = 0
             else:
+                # 性能指标没有达到最优，修改学习率衰减相关变量值
                 if self._shrink_learning_rate:
                     self._shrink_lr_cnt = self._shrink_lr_cnt + 1
                     logging.debug('shrink_lr_cnt add one {}'.format(self._shrink_lr_cnt))
@@ -238,25 +283,31 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
             logging.debug('cur val metrics is %.4f and best val metrics is %.4f' % (cur_metric, best_val_metric))
 
 
-def evaluate_on_single_scale(ph_images,
-                             ph_labels,
-                             feed_dict,
-                             metrics_reset_ops,
-                             metrics_update_ops,
-                             main_metric):
+class SummarySaverHookV2(session_run_hook.SessionRunHook):
+    def __init__(self,
+                 save_steps,
+                 output_dir=None,
+                 summary_writer=None,
+                 summary_op=None):
+        if save_steps is None or save_steps < 0:
+            raise ValueError('save_steps must be positive integer.')
+        if output_dir is None and summary_writer is None:
+            raise ValueError('output_dir and summary_writer cannot be both None.')
 
-    def evaluate_fn(sess, dataset):
-        if feed_dict is None:
-            raise ValueError('feed_dict must not be None')
-        print('evaluate val set...')
-        dataset.reset(sess)
-        sess.run(metrics_reset_ops)
-        while True:
-            try:
-                feed_dict[ph_images], feed_dict[ph_labels] = sess.run([ph_images, ph_labels])
-                sess.run(metrics_update_ops, feed_dict=feed_dict)
-            except OutOfRangeError:
-                break
-        return sess.run(main_metric, feed_dict=feed_dict)
+        self._save_steps = save_steps
+        self._summary_op = summary_op if summary_op is not None else tf.summary.merge_all()
+        self._summary_writer = summary_writer if summary_writer is not None else tf.summary.FileWriter(output_dir,
+                                                                                                       tf.get_default_graph())
+        self._global_step_tensor = tf.train.get_or_create_global_step()
 
-    return evaluate_fn
+    def after_run(self, run_context, run_values):
+        sess = run_context.session
+        cur_step = sess.run(self._global_step_tensor)
+
+        if cur_step != 0 and cur_step % self._save_steps == 0:
+            summary_string = sess.run(self._summary_op)
+            self._summary_writer.add_summary(summary_string, global_step=cur_step)
+
+    def end(self, session=None):
+        if self._summary_writer:
+            self._summary_writer.flush()

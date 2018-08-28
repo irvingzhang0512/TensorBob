@@ -1,9 +1,10 @@
-from .utils import preprocessing
-from .utils import initializers
-from .utils import regularizers
-from .utils import variables
-import training
-import models.segmentation as segmentation
-import models.classification as classification
-import dataset as data
-import evaluating
+from tensorbob.utils import preprocessing
+from tensorbob.utils import initializers
+from tensorbob.utils import regularizers
+from tensorbob.utils import variables
+from tensorbob.utils import metrics_utils
+import tensorbob.training as training
+import tensorbob.models.segmentation as segmentation
+import tensorbob.models.classification as classification
+import tensorbob.dataset as data
+import tensorbob.evaluating as evaluating
