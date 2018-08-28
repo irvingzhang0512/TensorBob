@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from nets.vgg import vgg_16, vgg_arg_scope
-from ..layer_utils import conv2d_transpose
+from tensorbob.models.layer_utils import conv2d_transpose
 
 __all__ = ['vgg16_fcn_8s']
 

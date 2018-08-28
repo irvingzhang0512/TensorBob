@@ -236,7 +236,7 @@ def _get_classification_labels_dataset(dataset_config):
     :return:
     """
     src = dataset_config['src']
-    return tf.data.Dataset.from_tensor_slices(src)
+    return tf.data.Dataset.from_tensor_slices(tf.to_int32(src))
 
 
 ###################################### 获取 图像分割 标签 ##################################################

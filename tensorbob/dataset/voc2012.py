@@ -3,11 +3,12 @@ import numpy as np
 from tensorbob.dataset.dataset_utils import get_images_dataset_by_paths_config, \
     get_classification_labels_dataset_config, get_segmentation_labels_dataset_config
 from tensorbob.dataset.base_dataset import BaseDataset, MergedDataset
+from tensorflow.python.platform import tf_logging as logging
 
 __all__ = ['get_voc_classification_dataset', 'get_voc_classification_merged_dataset',
            'get_voc_segmentation_dataset', 'get_voc_segmentation_merged_dataset']
 
-DATA_PATH = "/home/tensorflow05/data/voc2012"
+DATA_PATH = "/home/tensorflow05/data/VOCdevkit/VOC2012"
 IMAGES_DIR_NAME = 'JPEGImages'
 CLASSIFICATION_CONFIG_DIR_NAME = os.path.join('ImageSets', 'Main')
 SEGMENTATION_CLASS_DIR_NAME = 'SegmentationClass'
@@ -51,6 +52,7 @@ def _get_classification_images_and_labels(data_path, mode):
         keys.append(key)
         values.append(value)
 
+    logging.debug('successfully getting classification paths and labels for {} set'.format(mode))
     return keys, values
 
 
@@ -69,6 +71,7 @@ def get_voc_classification_dataset(data_path=DATA_PATH, mode='train', batch_size
     labels_config = get_classification_labels_dataset_config(label_paths)
     dataset_configs = [images_config, labels_config]
     train_mode = (mode == 'train')
+    logging.debug('successfully getting classification dataset for {} set'.format(mode))
     return BaseDataset(dataset_configs, batch_size, repeat=repeat, shuffle=train_mode)
 
 
@@ -87,6 +90,7 @@ def get_voc_classification_merged_dataset(train_args,
                                              mode='val',
                                              repeat=1,
                                              **val_args)
+    logging.debug('successfully getting classification merged dataset')
     return MergedDataset(training_set, val_set)
 
 
@@ -113,6 +117,7 @@ def _get_segmentation_images_and_labels(data_path, mode, val_set_size):
         pass
     else:
         raise ValueError('unknown mode {}'.format(mode))
+    logging.debug('successfully getting segmentation paths and labels for {} set'.format(mode))
     return np.array(image_paths)[ids], np.array(label_paths)[ids]
 
 
@@ -153,6 +158,8 @@ def get_voc_segmentation_dataset(data_path=DATA_PATH,
                                                            image_width=label_image_width, )
     dataset_configs = [images_config, labels_config]
     train_mode = (mode == 'train')
+
+    logging.debug('successfully getting segmentation dataset for {} set'.format(mode))
     return BaseDataset(dataset_configs,
                        batch_size,
                        repeat=repeat,
@@ -206,4 +213,5 @@ def get_voc_segmentation_merged_dataset(train_args,
                                            label_image_width=label_image_width,
                                            prefetch_buffer_size=prefetch_buffer_size,
                                            **val_args)
+    logging.debug('successfully getting segmentation merged dataset')
     return MergedDataset(training_set, val_set)

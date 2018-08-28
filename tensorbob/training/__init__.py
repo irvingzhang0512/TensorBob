@@ -1,3 +1,3 @@
-from .trainer_utils import *
-from .trainer import *
-from .training import *
+from tensorbob.training.trainer_utils import *
+from tensorbob.training.trainer import *
+from tensorbob.training.training_utils import *

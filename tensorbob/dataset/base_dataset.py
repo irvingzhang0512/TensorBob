@@ -103,7 +103,7 @@ class MergedDataset:
             self._tf_dataset_1_iterator = self._tf_dataset_1.make_initializable_iterator()
         elif isinstance(base_dataset_1, BaseDataset):
             self._tf_dataset_1 = base_dataset_1.tf_dataset
-            self._tf_dataset_1_iterator = self._tf_dataset_1.iterator
+            self._tf_dataset_1_iterator = base_dataset_1.iterator
         else:
             raise TypeError
         if isinstance(base_dataset_2, tf.data.Dataset):
@@ -115,9 +115,31 @@ class MergedDataset:
         else:
             raise TypeError
 
-        if self._tf_dataset_1.output_types != self._tf_dataset_2.output_types \
-                or self._tf_dataset_2.output_shapes != self._tf_dataset_2.output_shapes:
-            raise ValueError('Two datasets must have same output types and shapes.')
+        if self._tf_dataset_1.output_types != self._tf_dataset_2.output_types:
+            raise ValueError('Two datasets must have same output types.',
+                             self._tf_dataset_1.output_types, self._tf_dataset_2.output_types,
+                             self._tf_dataset_1.output_types != self._tf_dataset_2.output_types)
+
+        output_shapes_flag = True
+        try:
+            if isinstance(self._tf_dataset_1.output_shapes, tf.TensorShape) and \
+                    isinstance(self._tf_dataset_2.output_shapes, tf.TensorShape):
+                output_shapes_flag = self._tf_dataset_1.output_shapes.is_compatible_with(
+                    self._tf_dataset_2.output_shapes)
+            elif isinstance(self._tf_dataset_1.output_shapes, (list, tuple)) and \
+                    isinstance(self._tf_dataset_2.output_shapes, (list, tuple)):
+                if len(self._tf_dataset_1.output_shapes) == len(self._tf_dataset_2.output_shapes):
+                    for shape1, shape2 in zip(self._tf_dataset_1.output_shapes, self._tf_dataset_2.output_shapes):
+                        if not shape1.is_compatible_with(shape2):
+                            output_shapes_flag = False
+                            break
+        except:
+            output_shapes_flag = False
+
+        if not output_shapes_flag:
+            raise ValueError('Two datasets must have same output shapes.',
+                             self._tf_dataset_1.output_shapes, self._tf_dataset_2.output_shapes,
+                             self._tf_dataset_1.output_shapes != self._tf_dataset_2.output_shapes)
 
         self._ph_handle = tf.placeholder(tf.string, shape=[])
         self._iterator = tf.data.Iterator.from_string_handle(
@@ -181,4 +203,3 @@ class MergedDataset:
             raise ValueError('illegal handle_string is provided.')
         cur_handle_string = handle_string if handle_string else self._handle_strings[handle_index]
         return sess.run(self._next_batch, feed_dict={self._ph_handle: cur_handle_string})
-

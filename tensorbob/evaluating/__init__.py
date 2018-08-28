@@ -1,1 +1,1 @@
-from .evaluator import *
+from tensorbob.evaluating.evaluator import *

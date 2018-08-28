@@ -1,1 +1,1 @@
-from .fcn import *
+from tensorbob.models.segmentation.fcn import *

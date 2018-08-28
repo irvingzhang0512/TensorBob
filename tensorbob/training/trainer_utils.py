@@ -1,5 +1,5 @@
 import tensorflow as tf
-from utils.variables import get_variables_to_restore, assign_from_checkpoint_fn
+from tensorbob.utils.variables import get_variables_to_restore, assign_from_checkpoint_fn
 from tensorflow.python.platform import tf_logging as logging
 from nets import nets_factory
 
@@ -63,7 +63,7 @@ def learning_rate_steps_dict(steps_to_learning_rate_dict, min_learning_rate, glo
 def learning_rate_val_evaluation(learning_rate_start):
     """
     根据验证集结果进行学习率衰减
-    配合 training.py 中的 ValidationDatasetEvaluationHook 一起使用
+    配合 training_utils.py 中的 ValidationDatasetEvaluationHook 一起使用
     如果连续 shrink_epochs 次评估验证集结果没有提升，则学习率除以 shrink_by_number
     注意，学习率初始值保存在 learning_rate_start，衰减值保存在 learning_rate_shrink
     :param learning_rate_start:     学习率初始值

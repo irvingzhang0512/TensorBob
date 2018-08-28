@@ -1,10 +1,11 @@
 import tensorflow as tf
 import os
 from tensorflow.python.platform import tf_logging as logging
-from utils.variables import get_variables_to_restore
-from .training import train, create_train_op, create_finetune_train_op, \
+from tensorbob.utils.variables import get_variables_to_restore
+from tensorbob.training.training_utils import train, create_train_op, create_finetune_train_op, \
     evaluate_on_single_scale, ValidationDatasetEvaluationHook
-from .trainer_utils import learning_rate_exponential_decay, learning_rate_val_evaluation, learning_rate_steps_dict
+from tensorbob.training.trainer_utils import learning_rate_exponential_decay, learning_rate_val_evaluation, \
+    learning_rate_steps_dict
 
 __all__ = ['Trainer', 'BaseClassificationTrainer', 'BaseSegmentationTrainer']
 

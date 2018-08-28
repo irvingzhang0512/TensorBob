@@ -2,6 +2,7 @@ import os
 import numpy as np
 from tensorbob.dataset.dataset_utils import get_images_dataset_by_paths_config, get_classification_labels_dataset_config
 from tensorbob.dataset.base_dataset import BaseDataset, MergedDataset
+import tensorflow.python.platform.tf_logging as logging
 
 __all__ = ['get_imagenet_classification_dataset', 'get_imagenet_classification_merged_dataset']
 
@@ -75,6 +76,7 @@ def _get_images_paths_and_labels(mode, data_path, labels_offset):
             labels.append(label)
     else:
         raise ValueError('unknown mode {}'.format(mode))
+    logging.debug('successfully getting {} paths and labels'.format(mode))
     return paths, labels
 
 

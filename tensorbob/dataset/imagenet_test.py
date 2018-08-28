@@ -7,6 +7,7 @@ from tensorbob.dataset.dataset_utils import CropType
 
 
 class ImageNetTest(unittest.TestCase):
+    @unittest.skip
     def test_imagenet_classification_dataset(self):
         train_configs = {
             'norm_fn_first': norm_zero_to_one,
@@ -23,6 +24,7 @@ class ImageNetTest(unittest.TestCase):
             'vgg_image_size_max': 512,
         }
         d = get_imagenet_classification_dataset('val',
+                                                32,
                                                 repeat=1,
                                                 shuffle_buffer_size=10000,
                                                 prefetch_buffer_size=10000,
@@ -33,10 +35,11 @@ class ImageNetTest(unittest.TestCase):
             print('dataset size is', d.size)
             for _ in range(10):
                 images, labels = sess.run(d.next_batch)
-                print(images.shape, labels)
+                print(images.shape, labels.shape)
 
         self.assertTrue(True, 'Always True')
 
+    @unittest.skip
     def test_imagenet_classification_merged_dataset(self):
         train_args = {
             'norm_fn_first': norm_zero_to_one,
