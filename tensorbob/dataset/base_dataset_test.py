@@ -7,6 +7,7 @@ import unittest
 
 
 class BaseDatasetTest(unittest.TestCase):
+    @unittest.skip
     def test_merged_dataset(self):
         d1 = tf.data.Dataset.range(100)
         d2 = tf.data.Dataset.range(5)
@@ -24,6 +25,7 @@ class BaseDatasetTest(unittest.TestCase):
             for i in range(5):
                 self.assertEqual(d.get_next_batch(session, 1), i)
 
+    @unittest.skip
     def test_base_dataset(self):
         file_paths = ['../examples/images/1.jpg', '../examples/images/2.jpg']
         labels = [0, 1]

@@ -3,13 +3,12 @@ import tensorflow as tf
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 
 from tensorbob.utils.preprocessing import norm_zero_to_one, norm_minus_one_to_one
-from tensorbob.dataset.voc2012 import get_voc_classification_dataset, get_voc_segmentation_merged_dataset
+from tensorbob.dataset.ade2016 import get_ade_segmentation_dataset, get_ade_segmentation_merged_dataset
 from tensorbob.dataset.dataset_utils import CropType
 
 
-class Voc2012Test(unittest.TestCase):
-    @unittest.skip
-    def test_classification(self):
+class Ade2016Test(unittest.TestCase):
+    def test_segmentation_dataset(self):
         dataset_config = {
             'norm_fn_first': norm_zero_to_one,
             'norm_fn_end': norm_minus_one_to_one,
@@ -22,13 +21,19 @@ class Voc2012Test(unittest.TestCase):
             'image_width': 224,
             'image_height': 224,
         }
-        dataset = get_voc_classification_dataset(mode='train', batch_size=32, **dataset_config)
+        dataset = get_ade_segmentation_dataset(mode='val',
+                                               batch_size=32,
+                                               shuffle_buffer_size=100,
+                                               label_image_height=224,
+                                               label_image_width=224,
+                                               **dataset_config)
         with tf.Session() as sess:
             sess.run(dataset.iterator.initializer)
             total_cnt = 0
             while True:
                 try:
                     images, labels = sess.run(dataset.next_batch)
+                    # print(images.shape, labels.shape)
                     total_cnt += images.shape[0]
                     self.assertEqual(images.shape[1], 224)
                     self.assertEqual(images.shape[2], 224)
@@ -38,8 +43,7 @@ class Voc2012Test(unittest.TestCase):
         print('total cnt is', total_cnt)
         self.assertEqual(total_cnt, dataset.size)
 
-    @unittest.skip
-    def test_segmentation_dataset(self):
+    def test_segmentation_merged_dataset(self):
         train_configs = {
             'norm_fn_first': norm_zero_to_one,
             'norm_fn_end': norm_minus_one_to_one,
@@ -59,13 +63,12 @@ class Voc2012Test(unittest.TestCase):
             'image_width': 224,
             'image_height': 224,
         }
-        dataset = get_voc_segmentation_merged_dataset(
+        dataset = get_ade_segmentation_merged_dataset(
             train_args=train_configs,
             val_args=val_configs,
-            val_set_size=300,
             batch_size=32,
-            shuffle_buffer_size=10000,
-            prefetch_buffer_size=10000,
+            shuffle_buffer_size=100,
+            prefetch_buffer_size=100,
             repeat=10,
             label_image_height=224, label_image_width=224,
         )
@@ -75,7 +78,7 @@ class Voc2012Test(unittest.TestCase):
             for _ in range(10):
                 images, labels = dataset.get_next_batch(sess, 0)
                 print(images.shape, labels.shape)
-
+            print('------------------')
             sess.run(dataset.tf_dataset_2_iterator.initializer)
             for _ in range(10):
                 images, labels = dataset.get_next_batch(sess, 1)

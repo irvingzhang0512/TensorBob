@@ -241,13 +241,14 @@ def _get_classification_labels_dataset(dataset_config):
 
 ###################################### 获取 图像分割 标签 ##################################################
 
-def get_segmentation_labels_dataset_config(file_paths, color_to_int_list, **kwargs):
+def get_segmentation_labels_dataset_config(file_paths, color_to_int_list=None, **kwargs):
     return {
         'type': 2,
         'src': file_paths,
         'color_to_int_list': color_to_int_list,
         'image_height': kwargs.get('image_height'),
         'image_width': kwargs.get('image_width'),
+        'in_channels': kwargs.get('in_channels') or 3,
     }
 
 
@@ -256,18 +257,24 @@ def _get_segmentation_labels_dataset(dataset_config):
     color_to_int_list = dataset_config.get('color_to_int_list')  # 归一化函数
     image_height = dataset_config.get('image_height')
     image_width = dataset_config.get('image_width')
+    num_channels = dataset_config.get('in_channels') or 3
+
+    if num_channels == 3 and color_to_int_list is None:
+        raise ValueError('color_to_int_list cannot be None when in_channels = 3.')
 
     def _cur_parse_image_fn(image_path):
         img_file = tf.read_file(image_path)
-        cur_image = tf.image.decode_jpeg(img_file, channels=3)
+        cur_image = tf.image.decode_jpeg(img_file, channels=num_channels)
 
         if image_width is not None and image_height is not None:
             cur_image = tf.expand_dims(cur_image, 0)
             cur_image = tf.image.resize_nearest_neighbor(cur_image, [image_height, image_width])
             cur_image = tf.squeeze(cur_image, [0])
 
-        channels = tf.split(cur_image, 3, axis=2)
-        cur_image = (256 * channels[0] + channels[1]) * 256 + channels[2]
-        return tf.squeeze(tf.cast(tf.gather(color_to_int_list, tf.cast(cur_image, tf.int32)), tf.int32), axis=[-1])
+        if color_to_int_list and num_channels == 3:
+            channels = tf.split(cur_image, 3, axis=2)
+            cur_image = (256 * channels[0] + channels[1]) * 256 + channels[2]
+            return tf.squeeze(tf.cast(tf.gather(color_to_int_list, tf.cast(cur_image, tf.int32)), tf.int32), axis=[-1])
+        return tf.squeeze(cur_image, axis=[-1])
 
     return tf.data.Dataset.from_tensor_slices(file_paths).map(_cur_parse_image_fn)
