@@ -107,7 +107,7 @@ class VocSegmentationTrainer(bob.training.trainer.BaseSegmentationTrainer):
 
 if __name__ == '__main__':
     logs_dir_name = 'logs_new'
-    t = VocSegmentationTrainer(data_path="/home/tensorflow05/data/VOCdevkit/VOC2012",
+    t = VocSegmentationTrainer(data_path="/home/tensorflow05/data/VOCdevkit/voc2012",
                                pre_trained_model_path='/home/tensorflow05/data/pre-trained/slim/vgg_16.ckpt',
                                logging_every_n_steps=10,
                                summary_every_n_steps=10,

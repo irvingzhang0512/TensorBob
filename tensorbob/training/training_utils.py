@@ -14,6 +14,7 @@ __all__ = ['SecondOrStepTimer',
            'NanTensorHook',
            'SummarySaverHook',
            'SummarySaverHookV2',
+           'InitFnHook',
            'GlobalStepWaiterHook',
            'ProfilerHook',
            'FinalOpsHook',
@@ -283,7 +284,7 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
             logging.debug('cur val metrics is %.4f and best val metrics is %.4f' % (cur_metric, best_val_metric))
 
 
-class SummarySaverHookV2(session_run_hook.SessionRunHook):
+class SummarySaverHookV2(tf.train.SessionRunHook):
     def __init__(self,
                  save_steps,
                  output_dir=None,
@@ -311,3 +312,11 @@ class SummarySaverHookV2(session_run_hook.SessionRunHook):
     def end(self, session=None):
         if self._summary_writer:
             self._summary_writer.flush()
+
+
+class InitFnHook(tf.train.SessionRunHook):
+    def __init__(self, init_fn):
+        self._init_fn = init_fn
+
+    def after_create_session(self, session, coord):
+        self._init_fn(session)

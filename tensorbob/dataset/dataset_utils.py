@@ -275,6 +275,6 @@ def _get_segmentation_labels_dataset(dataset_config):
             channels = tf.split(cur_image, 3, axis=2)
             cur_image = (256 * channels[0] + channels[1]) * 256 + channels[2]
             return tf.squeeze(tf.cast(tf.gather(color_to_int_list, tf.cast(cur_image, tf.int32)), tf.int32), axis=[-1])
-        return tf.squeeze(cur_image, axis=[-1])
+        return tf.cast(tf.squeeze(cur_image, axis=[-1]), tf.int32)
 
     return tf.data.Dataset.from_tensor_slices(file_paths).map(_cur_parse_image_fn)

@@ -8,7 +8,7 @@ from tensorflow.python.platform import tf_logging as logging
 __all__ = ['get_voc_classification_dataset', 'get_voc_classification_merged_dataset',
            'get_voc_segmentation_dataset', 'get_voc_segmentation_merged_dataset']
 
-DATA_PATH = "/home/tensorflow05/data/VOCdevkit/VOC2012"
+DATA_PATH = "/home/tensorflow05/data/VOCdevkit/voc2012"
 IMAGES_DIR_NAME = 'JPEGImages'
 CLASSIFICATION_CONFIG_DIR_NAME = os.path.join('ImageSets', 'Main')
 SEGMENTATION_CLASS_DIR_NAME = 'SegmentationClass'
