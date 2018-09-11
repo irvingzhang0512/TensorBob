@@ -5,20 +5,20 @@ import os
 
 logging.set_verbosity(logging.DEBUG)
 
-LOGS_DIR = "./logs-resnet"
+LOGS_DIR = "./logs-segnet-vgg"
 VAL_LOGS_DIR = os.path.join(LOGS_DIR, 'val')
 
 LOGGING_AND_SUMMARY_EVERY_N_STEPS = 100
-VALIDATION_EVERY_N_OPS = 1300
-SAVE_EVERY_N_STEPS = 2000
+VALIDATION_EVERY_N_OPS = 2500
+SAVE_EVERY_N_STEPS = 5000
 
-PRE_TRAINED_MODEL_PATH = "/home/tensorflow05/data/pre-trained/slim/resnet_v2_50_2017_04_14/resnet_v2_50.ckpt"
+# PRE_TRAINED_MODEL_PATH = "/home/tensorflow05/data/pre-trained/slim/resnet_v2_50_2017_04_14/resnet_v2_50.ckpt"
 # PRE_TRAINED_MODEL_PATH = "/home/tensorflow05/data/pre-trained/slim/vgg_16.ckpt"
-# PRE_TRAINED_MODEL_PATH = None
+PRE_TRAINED_MODEL_PATH = None
 
 IMAGE_SIZE = 224
 VAL_SIZE = 200
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 EPOCHS = 1000
 
 LEARNING_RATE = 0.0001
@@ -55,10 +55,13 @@ def get_dataset():
 
 
 def get_model(x, is_training):
-    return bob.segmentation.resnet50_fcn_8s(x,
-                                            num_classes=NUM_CLASSES,
-                                            is_training=is_training,
-                                            weight_decay=WEIGHT_DECAY)
+    return bob.segmentation.segnet_vgg(x, num_classes=NUM_CLASSES,
+                                       is_training=is_training,
+                                       weight_decay=WEIGHT_DECAY)
+    # return bob.segmentation.resnet50_fcn_8s(x,
+    #                                         num_classes=NUM_CLASSES,
+    #                                         is_training=is_training,
+    #                                         weight_decay=WEIGHT_DECAY)
 
 
 #     return bob.segmentation.vgg16_fcn_8s(images,
