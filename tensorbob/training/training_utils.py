@@ -297,8 +297,10 @@ class SummarySaverHookV2(tf.train.SessionRunHook):
 
         self._save_steps = save_steps
         self._summary_op = summary_op if summary_op is not None else tf.summary.merge_all()
-        self._summary_writer = summary_writer if summary_writer is not None else tf.summary.FileWriter(output_dir,
-                                                                                                       tf.get_default_graph())
+        if summary_writer:
+            self._summary_writer = summary_writer
+        else:
+            self._summary_writer = tf.summary.FileWriter(output_dir, tf.get_default_graph())
         self._global_step_tensor = tf.train.get_or_create_global_step()
 
     def after_run(self, run_context, run_values):
@@ -308,6 +310,7 @@ class SummarySaverHookV2(tf.train.SessionRunHook):
         if cur_step != 0 and cur_step % self._save_steps == 0:
             summary_string = sess.run(self._summary_op)
             self._summary_writer.add_summary(summary_string, global_step=cur_step)
+            self._summary_writer.flush()
 
     def end(self, session=None):
         if self._summary_writer:

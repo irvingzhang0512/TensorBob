@@ -2,14 +2,14 @@ import tensorflow as tf
 from tensorbob.models.layer_utils import max_pool_with_argmax, unpool_2d
 import tensorflow.contrib.slim as slim
 
-__all__ = ['segnet_vgg']
+__all__ = ['segnet_vgg16']
 
 
-def segnet_vgg(inputs,
-               num_classes=1000,
-               weight_decay=0.00005,
-               is_training=False,
-               scope='segment_vgg'):
+def segnet_vgg16(inputs,
+                 num_classes=1000,
+                 weight_decay=0.00005,
+                 is_training=False,
+                 scope='segment_vgg'):
     with tf.variable_scope(scope, 'segment_vgg', [inputs]) as sc:
         with slim.arg_scope([slim.conv2d, slim.fully_connected],
                             activation_fn=tf.nn.relu,

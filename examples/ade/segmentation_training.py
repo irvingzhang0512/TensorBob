@@ -5,24 +5,23 @@ import os
 
 logging.set_verbosity(logging.DEBUG)
 
-LOGS_DIR = "./logs-segnet-vgg"
+LOGS_DIR = "./logs-fcn-vgg"
 VAL_LOGS_DIR = os.path.join(LOGS_DIR, 'val')
 
 LOGGING_AND_SUMMARY_EVERY_N_STEPS = 100
-VALIDATION_EVERY_N_OPS = 2500
-SAVE_EVERY_N_STEPS = 5000
+VALIDATION_EVERY_N_OPS = 1300
+SAVE_EVERY_N_STEPS = 2500
 
 # PRE_TRAINED_MODEL_PATH = "/home/tensorflow05/data/pre-trained/slim/resnet_v2_50_2017_04_14/resnet_v2_50.ckpt"
-# PRE_TRAINED_MODEL_PATH = "/home/tensorflow05/data/pre-trained/slim/vgg_16.ckpt"
-PRE_TRAINED_MODEL_PATH = None
+PRE_TRAINED_MODEL_PATH = "/home/tensorflow05/data/pre-trained/slim/vgg_16.ckpt"
+# PRE_TRAINED_MODEL_PATH = None
 
 IMAGE_SIZE = 224
-VAL_SIZE = 200
-BATCH_SIZE = 8
+BATCH_SIZE = 16
 EPOCHS = 1000
 
 LEARNING_RATE = 0.0001
-WEIGHT_DECAY = 0.00005
+WEIGHT_DECAY = 0.0005
 NUM_CLASSES = 151
 KEEP_PROB = 0.8
 
@@ -30,18 +29,18 @@ KEEP_PROB = 0.8
 def get_dataset():
     # 获取数据集
     train_configs = {
-        #         'norm_fn_first': bob.preprocessing.norm_imagenet,
-        'norm_fn_first': bob.preprocessing.norm_zero_to_one,
-        'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
+        'norm_fn_first': bob.preprocessing.norm_imagenet,
+        # 'norm_fn_first': bob.preprocessing.norm_zero_to_one,
+        # 'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
         'crop_type': bob.data.CropType.no_crop,
         'image_width': IMAGE_SIZE,
         'image_height': IMAGE_SIZE,
         'random_distort_color_flag': True,
     }
     val_configs = {
-        #         'norm_fn_first': bob.preprocessing.norm_imagenet,
-        'norm_fn_first': bob.preprocessing.norm_zero_to_one,
-        'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
+        'norm_fn_first': bob.preprocessing.norm_imagenet,
+        # 'norm_fn_first': bob.preprocessing.norm_zero_to_one,
+        # 'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
         'crop_type': bob.data.CropType.no_crop,
         'image_width': IMAGE_SIZE,
         'image_height': IMAGE_SIZE,
@@ -55,20 +54,18 @@ def get_dataset():
 
 
 def get_model(x, is_training):
-    return bob.segmentation.segnet_vgg(x, num_classes=NUM_CLASSES,
-                                       is_training=is_training,
-                                       weight_decay=WEIGHT_DECAY)
-    # return bob.segmentation.resnet50_fcn_8s(x,
+    # return bob.segmentation.segnet_vgg16(x, num_classes=NUM_CLASSES,
+    #                                    is_training=is_training,
+    #                                    weight_decay=WEIGHT_DECAY)
+    # return bob.segmentation.fcn_8s_resnet_v2_50(x,
     #                                         num_classes=NUM_CLASSES,
     #                                         is_training=is_training,
     #                                         weight_decay=WEIGHT_DECAY)
-
-
-#     return bob.segmentation.vgg16_fcn_8s(images,
-#                                          num_classes=NUM_CLASSES,
-#                                          is_training=is_training,
-#                                          keep_prob=KEEP_PROB,
-#                                          weight_decay=WEIGHT_DECAY)
+    return bob.segmentation.fcn_8s_vgg16(x,
+                                         num_classes=NUM_CLASSES,
+                                         is_training=is_training,
+                                         keep_prob=KEEP_PROB,
+                                         weight_decay=WEIGHT_DECAY)
 
 
 def get_metrics(logits, labels, total_loss):
@@ -104,10 +101,10 @@ def get_pre_trained_init_fn(pre_trained_model_path):
         return None
 
     variables_to_restore = bob.variables.get_variables_to_restore(
-        include=['resnet50_fcn_8s/resnet_v2_50'],
+        # include=['resnet50_fcn_8s/resnet_v2_50'],
         # exclude=['resnet50_fcn_8s/logtis', 'resnet50_fcn_8s/predictions'],
-        # include=['vgg16_fcn_8s/vgg_16'],
-        # exclude=['vgg16_fcn_8s/vgg_16/fc8'],
+        include=['vgg16_fcn_8s/vgg_16'],
+        exclude=['vgg16_fcn_8s/vgg_16/fc8'],
                                                                   )
     var_dict = {}
     for var in variables_to_restore:
@@ -138,7 +135,8 @@ if __name__ == '__main__':
     # 获取train_op
     tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
     total_loss = tf.losses.get_total_loss()
-    optimizer = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE)
+    # optimizer = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE)
+    optimizer = tf.train.MomentumOptimizer(learning_rate=LEARNING_RATE, momentum=0.99)
     train_op = bob.training.create_train_op(total_loss,
                                             optimizer,
                                             global_step=global_step,
