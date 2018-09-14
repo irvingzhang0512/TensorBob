@@ -1,6 +1,5 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-from nets.vgg import vgg_16, vgg_arg_scope
 from nets.resnet_v2 import resnet_arg_scope, resnet_v2_50
 from tensorbob.models.layer_utils import conv2d_transpose
 
@@ -65,15 +64,40 @@ def fcn_8s_vgg16(x,
                  keep_prob=0.8,
                  weight_decay=0.0005, ):
     with tf.variable_scope('vgg16_fcn_8s'):
-        with slim.arg_scope(vgg_arg_scope(weight_decay=weight_decay)):
-            _, end_points = vgg_16(x,
-                                   num_classes=num_classes,
-                                   is_training=is_training,
-                                   dropout_keep_prob=keep_prob,
-                                   spatial_squeeze=False,
-                                   fc_conv_padding='SAME'
-                                   )
+        # encoder
+        # vgg16, copy from slim, with a little changes: set max_pool2d attribute padding to 'SAME'
+        with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                            activation_fn=tf.nn.relu,
+                            weights_regularizer=slim.l2_regularizer(weight_decay),
+                            biases_initializer=tf.zeros_initializer()):
+            with slim.arg_scope([slim.conv2d, slim.max_pool2d], padding='SAME'):
+                with tf.variable_scope('vgg_16') as sc:
+                    end_points_collection = sc.original_name_scope + '_end_points'
+                    with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
+                                        outputs_collections=end_points_collection):
+                        net = slim.repeat(x, 2, slim.conv2d, 64, [3, 3], scope='conv1')
+                        net = slim.max_pool2d(net, [2, 2], scope='pool1')
+                        net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
+                        net = slim.max_pool2d(net, [2, 2], scope='pool2')
+                        net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
+                        net = slim.max_pool2d(net, [2, 2], scope='pool3')
+                        net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
+                        net = slim.max_pool2d(net, [2, 2], scope='pool4')
+                        net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
+                        net = slim.max_pool2d(net, [2, 2], scope='pool5')
+                        net = slim.conv2d(net, 4096, [7, 7], padding='VALID', scope='fc6')
+                        net = slim.dropout(net, keep_prob, is_training=is_training, scope='dropout6')
+                        net = slim.conv2d(net, 4096, [1, 1], scope='fc7')
+                        end_points = slim.utils.convert_collection_to_dict(end_points_collection)
+                        net = slim.dropout(net, keep_prob, is_training=is_training,  scope='dropout7')
+                        net = slim.conv2d(net, num_classes, [1, 1], activation_fn=None, normalizer_fn=None, scope='fc8')
+                        end_points[sc.name + '/fc8'] = net
+
+        # decoder
         with tf.variable_scope('conv_transpose_1'):
+            print(4, 4,
+                  num_classes,
+                  end_points['vgg16_fcn_8s/vgg_16/fc8'].get_shape()[3])
             net = conv2d_transpose(end_points['vgg16_fcn_8s/vgg_16/fc8'],
                                    filter_size=(4, 4,
                                                 num_classes,

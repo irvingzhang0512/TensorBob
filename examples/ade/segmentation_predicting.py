@@ -4,14 +4,15 @@ import cv2
 import os
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.framework.errors_impl import OutOfRangeError
+
 logging.set_verbosity(logging.DEBUG)
 
-PRE_TRAINED_MODEL_PATH = "/home/tensorflow05/zyy/tensorbob/examples/ade/logs-resnet/val/model.ckpt-33800"
+PRE_TRAINED_MODEL_PATH = "/home/tensorflow05/zyy/tensorbob/examples/ade/logs-fcn-vgg/val/model.ckpt-67600"
 TEST_FILE_PATH = "/home/tensorflow05/data/ade/ADEChallengeData2016/list.txt"
 OUTPUT_DIR = '/home/tensorflow05/data/ade/ADEChallengeData2016/annotations/testing/'
 WEIGHT_DECAY = 0.00005
+KEEP_DROPOUT_PROB = 0.8
 NUM_CLASSES = 151
-
 
 if __name__ == '__main__':
     configs = {
@@ -23,10 +24,11 @@ if __name__ == '__main__':
 
     # 搭建网络
     images = test_dataset.next_batch
-    logits, _ = bob.segmentation.resnet50_fcn_8s(images[0],
-                                                 num_classes=NUM_CLASSES,
-                                                 is_training=False,
-                                                 weight_decay=WEIGHT_DECAY)
+    logits, _ = bob.segmentation.fcn_8s_vgg16(images[0],
+                                              num_classes=NUM_CLASSES,
+                                              is_training=False,
+                                              weight_decay=WEIGHT_DECAY,
+                                              keep_prob=KEEP_DROPOUT_PROB)
     predictions = tf.cast(tf.argmax(logits, axis=-1), tf.uint8)
     predictions = tf.squeeze(predictions, [0])
     predictions = tf.expand_dims(predictions, -1)
@@ -39,7 +41,7 @@ if __name__ == '__main__':
         os.path.join(OUTPUT_DIR, image_file_name) for
         image_file_name in test_file_names]
 
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.MODEL_VARIABLES))
     with tf.Session() as sess:
         saver.restore(sess, PRE_TRAINED_MODEL_PATH)
         logging.debug('restore successfully...')
@@ -53,7 +55,7 @@ if __name__ == '__main__':
                 cur_res = sess.run(predictions)
                 cv2.imwrite(test_file_names[i], cur_res)
                 i += 1
-                if i % 100 == 0:
+                if i % 1 == 0:
                     logging.debug('successfully predicting %d images' % i)
             except OutOfRangeError:
                 break
