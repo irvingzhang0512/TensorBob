@@ -8,6 +8,7 @@ from tensorbob.dataset.dataset_utils import CropType
 
 
 class CamVidTest(unittest.TestCase):
+    @unittest.skip
     def test_segmentation_dataset(self):
         dataset_config = {
             'norm_fn_first': norm_zero_to_one,
@@ -43,6 +44,7 @@ class CamVidTest(unittest.TestCase):
         print('total cnt is', total_cnt)
         self.assertEqual(total_cnt, dataset.size)
 
+    @unittest.skip
     def test_segmentation_merged_dataset(self):
         train_configs = {
             'norm_fn_first': norm_zero_to_one,
@@ -78,9 +80,8 @@ class CamVidTest(unittest.TestCase):
             for _ in range(10):
                 images, labels = dataset.get_next_batch(sess, 0)
                 print(images.shape, labels.shape)
-            print('------------------')
             sess.run(dataset.tf_dataset_2_iterator.initializer)
-            for _ in range(10):
+            for _ in range(3):
                 images, labels = dataset.get_next_batch(sess, 1)
                 print(images.shape, labels.shape)
 

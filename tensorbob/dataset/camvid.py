@@ -44,7 +44,7 @@ def get_camvid_segmentation_dataset(mode='train',
     label_dir = os.path.join(data_path, mode + '_labels')
     image_names = os.listdir(image_dir)
     image_paths = [os.path.join(image_dir, image_name) for image_name in image_names]
-    label_paths = [os.path.join(label_dir, image_name[image_name.find('.')] + '_L.png') for image_name in image_names]
+    label_paths = [os.path.join(label_dir, image_name[:image_name.find('.')] + '_L.png') for image_name in image_names]
 
     # 获取标签颜色与编号之间的关系
     color_to_int_list = _get_color_to_int_list(data_path)

@@ -271,7 +271,7 @@ def _get_segmentation_labels_dataset(dataset_config):
             cur_image = tf.image.resize_nearest_neighbor(cur_image, [image_height, image_width])
             cur_image = tf.squeeze(cur_image, [0])
 
-        if color_to_int_list and num_channels == 3:
+        if color_to_int_list is not None and num_channels == 3:
             channels = tf.split(cur_image, 3, axis=2)
             cur_image = (256 * channels[0] + channels[1]) * 256 + channels[2]
             return tf.squeeze(tf.cast(tf.gather(color_to_int_list, tf.cast(cur_image, tf.int32)), tf.int32), axis=[-1])

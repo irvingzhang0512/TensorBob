@@ -8,6 +8,7 @@ from tensorbob.dataset.dataset_utils import CropType
 
 
 class Ade2016Test(unittest.TestCase):
+    @unittest.skip
     def test_segmentation_dataset(self):
         dataset_config = {
             'norm_fn_first': norm_zero_to_one,
@@ -43,6 +44,7 @@ class Ade2016Test(unittest.TestCase):
         print('total cnt is', total_cnt)
         self.assertEqual(total_cnt, dataset.size)
 
+    @unittest.skip
     def test_segmentation_merged_dataset(self):
         train_configs = {
             'norm_fn_first': norm_zero_to_one,
