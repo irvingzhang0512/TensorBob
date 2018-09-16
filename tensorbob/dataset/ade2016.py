@@ -7,6 +7,7 @@ from tensorflow.python.platform import tf_logging as logging
 __all__ = ['get_ade_segmentation_dataset', 'get_ade_segmentation_merged_dataset']
 
 ROOT_DIR = "/home/tensorflow05/data/ade/ADEChallengeData2016"
+# ROOT_DIR = "E:\\PycharmProjects\\data\\ade\\ADEChallengeData2016"
 TRAINING_DIR_NAME = "training"
 VAL_DIR_NAME = "validation"
 TESTING_DIR_NAME = "testing"
