@@ -85,7 +85,7 @@ def fcn_8s_vgg16(x,
                         net = slim.max_pool2d(net, [2, 2], scope='pool4')
                         net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
                         net = slim.max_pool2d(net, [2, 2], scope='pool5')
-                        net = slim.conv2d(net, 4096, [7, 7], padding='VALID', scope='fc6')
+                        net = slim.conv2d(net, 4096, [7, 7], padding='SAME', scope='fc6')
                         net = slim.dropout(net, keep_prob, is_training=is_training, scope='dropout6')
                         net = slim.conv2d(net, 4096, [1, 1], scope='fc7')
                         end_points = slim.utils.convert_collection_to_dict(end_points_collection)
@@ -95,9 +95,6 @@ def fcn_8s_vgg16(x,
 
         # decoder
         with tf.variable_scope('conv_transpose_1'):
-            print(4, 4,
-                  num_classes,
-                  end_points['vgg16_fcn_8s/vgg_16/fc8'].get_shape()[3])
             net = conv2d_transpose(end_points['vgg16_fcn_8s/vgg_16/fc8'],
                                    filter_size=(4, 4,
                                                 num_classes,
