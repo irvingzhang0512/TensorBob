@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorbob.dataset.dataset_utils import get_dataset_by_config
+from tensorbob.dataset.dataset_utils import get_single_dataset_by_config
 
 __all__ = ['BaseDataset', 'MergedDataset']
 
@@ -11,7 +11,10 @@ class BaseDataset:
     包装 tf.data.Dataset 实例，保存相关的 iterator, next_batch 等信息
     """
 
-    def __init__(self, dataset_configs,
+    def __init__(self,
+                 dataset=None,
+                 dataset_size=None,
+                 dataset_configs=None,
                  batch_size=32,
                  shuffle=False,
                  shuffle_buffer_size=None,
@@ -35,28 +38,35 @@ class BaseDataset:
         self._repeat = repeat
         self._size = None
 
-        # 根据输入的 dict 配置文件，获取一组 tf.data.Dataset 实例
-        datasets = []
-        for dataset_config in dataset_configs:
-            if not isinstance(dataset_config, dict):
-                raise ValueError('dataset_config must be dict instead of {}'.format(type(dataset_config)))
-            cur_dataset, cur_dataset_size = get_dataset_by_config(dataset_config)
-            datasets.append(cur_dataset)
-            if self._size:
-                assert self._size == cur_dataset_size
-            else:
-                self._size = cur_dataset_size
+        if dataset is not None:
+            # 直接输入一个 tf.data.Dataset 实例
+            if dataset_size is None:
+                raise ValueError('dataset_size cannot be None when dataset is not None.')
+            self._size = dataset_size
+            cur_dataset = dataset
+        else:
+            # 根据输入的 dict 配置文件，获取 tf.data.Dataset 实例
+            datasets = []
+            for dataset_config in dataset_configs:
+                if not isinstance(dataset_config, dict):
+                    raise ValueError('dataset_config must be dict instead of {}'.format(type(dataset_config)))
+                cur_dataset, cur_dataset_size = get_single_dataset_by_config(dataset_config)
+                datasets.append(cur_dataset)
+                if self._size:
+                    assert self._size == cur_dataset_size
+                else:
+                    self._size = cur_dataset_size
+            cur_dataset = tf.data.Dataset.zip(tuple(datasets))
 
         # dataset 操作
-        dataset = tf.data.Dataset.zip(tuple(datasets))
-        dataset = dataset.repeat(self._repeat)
+        cur_dataset = cur_dataset.repeat(self._repeat)
         if shuffle:
             if shuffle_buffer_size is None:
                 shuffle_buffer_size = self.size
-            dataset = dataset.shuffle(shuffle_buffer_size)
+            cur_dataset = cur_dataset.shuffle(shuffle_buffer_size)
         if prefetch_buffer_size:
-            dataset = dataset.prefetch(prefetch_buffer_size)
-        self._tf_dataset = dataset.batch(batch_size)
+            cur_dataset = cur_dataset.prefetch(prefetch_buffer_size)
+        self._tf_dataset = cur_dataset.batch(batch_size)
 
         # dataset iterator 相关参数
         self._iterator = self._tf_dataset.make_initializable_iterator()

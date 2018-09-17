@@ -10,7 +10,7 @@ def conv2d_transpose(inputs,
                      filter_size,
                      output_shape,
                      strides,
-                     initializer=slim.xavier_initializer(False),
+                     initializer=tf.keras.initializers.he_normal(),
                      padding='SAME',
                      weight_decay=0.0005,
                      scope=None):

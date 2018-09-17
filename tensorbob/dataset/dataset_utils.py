@@ -1,10 +1,10 @@
+# coding=utf-8
 import tensorflow as tf
 from enum import Enum
 from tensorbob.utils.preprocessing import central_crop, random_crop, \
     random_crop_inception, random_crop_vgg, random_distort_color
 
-
-__all__ = ['get_dataset_by_config',
+__all__ = ['get_single_dataset_by_config',
            'get_images_dataset_by_paths_config',
            'get_classification_labels_dataset_config',
            'get_segmentation_labels_dataset_config',
@@ -12,7 +12,7 @@ __all__ = ['get_dataset_by_config',
            ]
 
 
-def get_dataset_by_config(dataset_config):
+def get_single_dataset_by_config(dataset_config):
     """
     通过config获取dataset以及dataset_size
     目前支持以下几种：

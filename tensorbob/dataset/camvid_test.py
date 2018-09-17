@@ -8,7 +8,7 @@ from tensorbob.dataset.dataset_utils import CropType
 
 
 class CamVidTest(unittest.TestCase):
-    @unittest.skip
+    # @unittest.skip
     def test_segmentation_dataset(self):
         dataset_config = {
             'norm_fn_first': norm_zero_to_one,
@@ -18,15 +18,15 @@ class CamVidTest(unittest.TestCase):
             'random_distort_color_flag': True,
             'distort_color_fast_mode_flag': False,
 
-            'crop_type': CropType.no_crop,
-            'image_width': 224,
-            'image_height': 224,
+            'crop_type': CropType.random_normal,
+            'image_width': 384,
+            'image_height': 384,
+            'crop_height': 224,
+            'crop_width': 224,
         }
         dataset = get_camvid_segmentation_dataset(mode='val',
                                                   batch_size=32,
                                                   shuffle_buffer_size=100,
-                                                  label_image_height=224,
-                                                  label_image_width=224,
                                                   **dataset_config)
         with tf.Session() as sess:
             sess.run(dataset.iterator.initializer)
@@ -72,7 +72,6 @@ class CamVidTest(unittest.TestCase):
             shuffle_buffer_size=100,
             prefetch_buffer_size=100,
             repeat=10,
-            label_image_height=224, label_image_width=224,
         )
         with tf.Session() as sess:
             dataset.init(sess)

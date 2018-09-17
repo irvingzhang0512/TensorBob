@@ -3,7 +3,7 @@
 ## 1. 主要功能
 + `BaseDataset`：封装单个`tf.data.Dataset`对象。
 + `MergedDataset`：封装两个`tf.data.Dataset`对象，使用 feedable iterator 来处理这两个实例，用于训练集/验证集。
-+ 提供`get_dataset_by_config`方法，根据属性参数（以python dict表示）获取`tf.data.Dataset`实例。
++ 提供`get_single_dataset_by_config`方法，根据属性参数（以python dict表示）获取`tf.data.Dataset`实例。
     + 数据预处理
         + 提供了数据增强方法（中心切片、vgg切片、inception切片、水平镜像、垂直镜像、色彩转换）。
         + 提供了数据预处理方法（减去ImageNet平均数，归一化到[0, 1]或[-1, 1]）。
@@ -50,3 +50,7 @@
     + SegmentationClass：图像分割标签，文件名与JPEGImages中对应。
     + SegmentationObject：物体分隔标签，文件名与JPEGImages中对应。
 + `voc2012.py`
+
+### 2.3. ADEChallenge
+
+### 2.4. CamVid

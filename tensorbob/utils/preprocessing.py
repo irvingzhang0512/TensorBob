@@ -80,7 +80,7 @@ def random_crop(images, crop_height, crop_width, keep_aspect_ratio=True):
     切片前通过 resize_smallest_size 确认短边大小
     如果输入图片有多张，则要求所有图片shape相同
     :param keep_aspect_ratio: 
-    :param images: 
+    :param images:
     :param crop_height: 
     :param crop_width: 
     :return: 
