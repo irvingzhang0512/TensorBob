@@ -269,9 +269,6 @@ class Trainer:
         scaffold = self._get_scaffold()
         logging.debug('successfully getting scaffold')
 
-        # train summary writer
-        summary_writer = tf.summary.FileWriter(self._base_logs_dir, graph=tf.get_default_graph())
-
         logging.debug('training start')
         train(train_op,
               self._base_logs_dir,
@@ -280,7 +277,8 @@ class Trainer:
               max_steps=self._max_steps,
               feed_fn=self._get_train_feed_fn,
               logging_tensors=logging_tensors, logging_every_n_steps=self._logging_every_n_steps,
-              summary_writer=summary_writer, summary_every_n_steps=self._summary_every_n_steps,
+              summary_writer=tf.summary.FileWriter(self._base_logs_dir, graph=tf.get_default_graph()),
+              summary_every_n_steps=self._summary_every_n_steps,
               save_every_n_steps=self._save_every_n_steps,
               )
 

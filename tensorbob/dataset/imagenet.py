@@ -108,7 +108,7 @@ def get_imagenet_classification_dataset(mode,
     labels_config = get_classification_labels_dataset_config(labels)
     dataset_config = [images_config, labels_config]
     train_mode = True if mode == 'train' else False
-    return BaseDataset(dataset_config,
+    return BaseDataset(dataset_configs=dataset_config,
                        batch_size=batch_size,
                        shuffle=train_mode,
                        shuffle_buffer_size=shuffle_buffer_size,

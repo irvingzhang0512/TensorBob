@@ -459,7 +459,7 @@ def _get_dataset(ph_image_paths, ph_image_labels, args):
         image_config_dict['random_flip_horizontal_flag'] = True
         image_config_dict['random_distort_color_flag'] = True
     images_config = bob.data.get_images_dataset_by_paths_config(ph_image_paths, **image_config_dict)
-    return bob.data.BaseDataset([images_config, labels_config], batch_size=args.batch_size)
+    return bob.data.BaseDataset(dataset_configs=[images_config, labels_config], batch_size=args.batch_size)
 
 
 def _parse_arguments(argv):

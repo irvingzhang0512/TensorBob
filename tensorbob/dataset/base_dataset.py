@@ -50,12 +50,12 @@ class BaseDataset:
             for dataset_config in dataset_configs:
                 if not isinstance(dataset_config, dict):
                     raise ValueError('dataset_config must be dict instead of {}'.format(type(dataset_config)))
-                cur_dataset, cur_dataset_size = get_single_dataset_by_config(dataset_config)
-                datasets.append(cur_dataset)
+                cur_d, cur_d_size = get_single_dataset_by_config(dataset_config)
+                datasets.append(cur_d)
                 if self._size:
-                    assert self._size == cur_dataset_size
+                    assert self._size == cur_d_size
                 else:
-                    self._size = cur_dataset_size
+                    self._size = cur_d_size
             cur_dataset = tf.data.Dataset.zip(tuple(datasets))
 
         # dataset 操作

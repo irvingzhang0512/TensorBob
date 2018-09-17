@@ -258,6 +258,7 @@ class ValidationDatasetEvaluationHook(tf.train.SessionRunHook):
             if self._summary_op is not None and self._summary_writer is not None:
                 summary_string = sess.run(self._summary_op)
                 self._summary_writer.add_summary(summary_string, cur_global_step)
+                self._summary_writer.flush()
                 logging.debug('add summary successfully...')
 
             if cur_metric > best_val_metric:

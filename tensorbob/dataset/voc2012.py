@@ -72,7 +72,7 @@ def get_voc_classification_dataset(data_path=DATA_PATH, mode='train', batch_size
     dataset_configs = [images_config, labels_config]
     train_mode = (mode == 'train')
     logging.debug('successfully getting classification dataset for {} set'.format(mode))
-    return BaseDataset(dataset_configs, batch_size, repeat=repeat, shuffle=train_mode)
+    return BaseDataset(dataset_configs=dataset_configs, batch_size=batch_size, repeat=repeat, shuffle=train_mode)
 
 
 def get_voc_classification_merged_dataset(train_args,
@@ -160,8 +160,8 @@ def get_voc_segmentation_dataset(data_path=DATA_PATH,
     train_mode = (mode == 'train')
 
     logging.debug('successfully getting segmentation dataset for {} set'.format(mode))
-    return BaseDataset(dataset_configs,
-                       batch_size,
+    return BaseDataset(dataset_configs=dataset_configs,
+                       batch_size=batch_size,
                        repeat=repeat,
                        shuffle=train_mode,
                        shuffle_buffer_size=shuffle_buffer_size,

@@ -69,7 +69,7 @@ def get_segmentation_dataset(dataset_configs,
     """
     获取数据分割数据集
     要求：图片与标签的尺寸相同
-    :param dataset_config:
+    :param dataset_configs:
     :param epochs:
     :param batch_size:
     :param shuffle_flag:

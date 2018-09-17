@@ -1,13 +1,13 @@
 import os
-from tensorbob.dataset.dataset_utils import get_images_dataset_by_paths_config, \
-    get_segmentation_labels_dataset_config
+from tensorbob.dataset.dataset_utils import get_images_dataset_by_paths_config
+from tensorbob.dataset.segmentation_dataset_utils import get_segmentation_dataset
 from tensorbob.dataset.base_dataset import BaseDataset, MergedDataset
 from tensorflow.python.platform import tf_logging as logging
 
 __all__ = ['get_ade_segmentation_dataset', 'get_ade_segmentation_merged_dataset']
 
-ROOT_DIR = "/home/tensorflow05/data/ade/ADEChallengeData2016"
-# ROOT_DIR = "E:\\PycharmProjects\\data\\ade\\ADEChallengeData2016"
+# ROOT_DIR = "/home/tensorflow05/data/ade/ADEChallengeData2016"
+ROOT_DIR = "E:\\PycharmProjects\\data\\ade\\ADEChallengeData2016"
 TRAINING_DIR_NAME = "training"
 VAL_DIR_NAME = "validation"
 TESTING_DIR_NAME = "testing"
@@ -42,45 +42,50 @@ def _get_images_and_labels_path(data_path, mode):
 def get_ade_segmentation_dataset(data_path=ROOT_DIR,
                                  mode='train',
                                  batch_size=32,
-                                 shuffle_buffer_size=10000,
-                                 prefetch_buffer_size=10000,
+                                 shuffle_buffer_size=1000,
+                                 prefetch_buffer_size=1000,
                                  repeat=1,
-                                 label_image_height=None, label_image_width=None,
-                                 **kwargs):
-    image_paths, label_paths = _get_images_and_labels_path(data_path, mode)
-    images_config = get_images_dataset_by_paths_config(image_paths, **kwargs)
-    dataset_configs = [images_config]
-    if mode != 'test':
-        labels_config = get_segmentation_labels_dataset_config(label_paths,
-                                                               in_channels=1,
-                                                               image_height=label_image_height,
-                                                               image_width=label_image_width, )
-        dataset_configs.append(labels_config)
+                                 **image_configs):
+    if mode not in ['train', 'val', 'test']:
+        raise ValueError('unknown mode {}, must be train, val or test.'.format(mode))
+    if image_configs is None:
+        image_configs = {}
 
-    train_mode = (mode == 'train')
-    logging.debug('successfully getting segmentation dataset for {} set'.format(mode))
-    return BaseDataset(dataset_configs,
-                       batch_size,
-                       repeat=repeat,
-                       shuffle=train_mode,
-                       shuffle_buffer_size=shuffle_buffer_size,
-                       prefetch_buffer_size=prefetch_buffer_size)
+    # 获取image_paths 和 labels_path
+    image_paths, label_paths = _get_images_and_labels_path(data_path, mode)
+
+    if mode == 'test':
+        images_config = get_images_dataset_by_paths_config(image_paths, **image_configs)
+        dataset_configs = [images_config]
+        return BaseDataset(dataset_configs=dataset_configs,
+                           batch_size=batch_size,
+                           repeat=repeat,
+                           shuffle=False,
+                           prefetch_buffer_size=prefetch_buffer_size)
+
+    # train 或 val
+    image_configs['labels_paths'] = label_paths
+    image_configs['images_paths'] = image_paths
+    image_configs['label_in_channels'] = 1
+    return get_segmentation_dataset(image_configs,
+                                    epochs=repeat,
+                                    batch_size=batch_size,
+                                    shuffle_flag=(mode == 'train'),
+                                    shuffle_buffer_size=shuffle_buffer_size,
+                                    prefetch_buffer_size=prefetch_buffer_size,)
 
 
 def get_ade_segmentation_merged_dataset(train_args,
                                         val_args,
                                         data_path=ROOT_DIR,
                                         batch_size=32,
-                                        shuffle_buffer_size=10000,
-                                        prefetch_buffer_size=10000,
-                                        repeat=10,
-                                        label_image_height=None, label_image_width=None):
+                                        shuffle_buffer_size=1000,
+                                        prefetch_buffer_size=1000,
+                                        repeat=10,):
     training_set = get_ade_segmentation_dataset(data_path=data_path,
                                                 mode='train',
                                                 batch_size=batch_size,
                                                 repeat=repeat,
-                                                label_image_height=label_image_height,
-                                                label_image_width=label_image_width,
                                                 shuffle_buffer_size=shuffle_buffer_size,
                                                 prefetch_buffer_size=prefetch_buffer_size,
                                                 **train_args)
@@ -88,8 +93,6 @@ def get_ade_segmentation_merged_dataset(train_args,
                                            mode='val',
                                            batch_size=batch_size,
                                            repeat=1,
-                                           label_image_height=label_image_height,
-                                           label_image_width=label_image_width,
                                            prefetch_buffer_size=prefetch_buffer_size,
                                            **val_args)
     logging.debug('successfully getting segmentation merged dataset')

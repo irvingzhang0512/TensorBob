@@ -7,7 +7,7 @@ from tensorflow.python.platform import tf_logging as logging
 logging.set_verbosity(logging.DEBUG)
 
 
-class CamVidTrainer(bob.training.BaseSegmentationTrainer):
+class AdeTrainer(bob.training.BaseSegmentationTrainer):
     def __init__(self, epochs, train_configs, val_configs, **kwargs):
         # {
         #     'batch_size': 32,
@@ -41,17 +41,17 @@ class CamVidTrainer(bob.training.BaseSegmentationTrainer):
         #     'fine_tune_vars_exclude': None,
         #
         # }
-        super().__init__(num_classes=32, **kwargs)
+        super().__init__(num_classes=151, **kwargs)
         self._epochs = epochs
         self._train_configs = train_configs
         self._val_configs = val_configs
 
     def _get_merged_dataset(self):
-        return bob.data.get_camvid_segmentation_merged_dataset(self._train_configs,
-                                                               self._val_configs,
-                                                               batch_size=self._batch_size,
-                                                               repeat=self._epochs,
-                                                               shuffle_buffer_size=100)
+        return bob.data.get_ade_segmentation_merged_dataset(self._train_configs,
+                                                            self._val_configs,
+                                                            batch_size=self._batch_size,
+                                                            repeat=self._epochs,
+                                                            shuffle_buffer_size=5000)
 
     def _get_optimizer(self):
         return tf.train.RMSPropOptimizer(learning_rate=self._get_learning_rate())
@@ -76,20 +76,21 @@ class CamVidTrainer(bob.training.BaseSegmentationTrainer):
 
 def main(args):
     train_configs = {
-        # 'norm_fn_first': bob.preprocessing.norm_imagenet,
         'norm_fn_first': bob.preprocessing.norm_zero_to_one,
         'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
+
         'crop_type': bob.data.CropType.random_normal,
         'image_width': args.image_width,
         'image_height': args.image_height,
         'crop_height': args.crop_height,
         'crop_width': args.crop_width,
+
         'random_distort_color_flag': True,
     }
     val_configs = {
-        # 'norm_fn_first': bob.preprocessing.norm_imagenet,
         'norm_fn_first': bob.preprocessing.norm_zero_to_one,
         'norm_fn_end': bob.preprocessing.norm_minus_one_to_one,
+
         'crop_type': bob.data.CropType.random_normal,
         'image_width': args.image_width,
         'image_height': args.image_height,
@@ -119,10 +120,10 @@ def main(args):
         # 'fine_tune_vars_include': args.fine_tune_vars_include,
         # 'fine_tune_vars_exclude': args.fine_tune_vars_exclude,
     }
-    trainer = CamVidTrainer(args.epochs,
-                            train_configs,
-                            val_configs,
-                            **trainer_configs)
+    trainer = AdeTrainer(args.epochs,
+                         train_configs,
+                         val_configs,
+                         **trainer_configs)
     trainer.train()
 
 
@@ -130,24 +131,23 @@ def _parse_arguments(argv):
     parser = argparse.ArgumentParser()
 
     # local input file
-    parser.add_argument('--data_path', type=str,
-                        default="E:\\PycharmProjects\\data\\CamVid")
+    parser.add_argument('--data_path', type=str, default="E:\\PycharmProjects\\data\\ade\\ADEChallengeData2016")
 
     # training configs
-    parser.add_argument('--batch_size', type=int, default=4)  # 必须是3的倍数
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=10000)
     parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--keep_prob', type=float, default=0.8)
 
     # learning rate
     parser.add_argument('--learning_rate_start', type=float, default=0.001)
-    parser.add_argument('--learning_rate_decay_steps', type=int, default=100)
+    parser.add_argument('--learning_rate_decay_steps', type=int, default=10000)
     parser.add_argument('--learning_rate_decay_rate', type=float, default=0.995)
     parser.add_argument('--learning_rate_staircase', type=bool, default=True)
 
     # model
-    parser.add_argument('--image_width', type=int, default=960)
-    parser.add_argument('--image_height', type=int, default=720)
+    parser.add_argument('--image_width', type=int, default=720)
+    parser.add_argument('--image_height', type=int, default=540)
     parser.add_argument('--crop_width', type=int, default=224)
     parser.add_argument('--crop_height', type=int, default=224)
     # parser.add_argument('--fine_tune_file_path', type=str,
@@ -159,10 +159,10 @@ def _parse_arguments(argv):
     parser.add_argument('--base_logs_dir', type=str, default="./logs-crop", help='')
 
     # steps
-    parser.add_argument('--logging_every_n_steps', type=int, default=10)
-    parser.add_argument('--summary_every_n_steps', type=int, default=10)
-    parser.add_argument('--save_every_n_steps', type=int, default=100)
-    parser.add_argument('--evaluate_every_n_steps', type=int, default=100)
+    parser.add_argument('--logging_every_n_steps', type=int, default=500)
+    parser.add_argument('--summary_every_n_steps', type=int, default=500)
+    parser.add_argument('--save_every_n_steps', type=int, default=10000)
+    parser.add_argument('--evaluate_every_n_steps', type=int, default=5000)
 
     return parser.parse_args(argv)
 

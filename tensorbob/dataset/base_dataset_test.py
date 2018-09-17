@@ -71,7 +71,7 @@ class BaseDatasetTest(unittest.TestCase):
         }
         dataset_configs = [get_images_dataset_by_paths_config(file_paths, **args),
                            get_classification_labels_dataset_config(labels)]
-        dataset = BaseDataset(dataset_configs,
+        dataset = BaseDataset(dataset_configs=dataset_configs,
                               batch_size=32,
                               shuffle=True,
                               shuffle_buffer_size=None,

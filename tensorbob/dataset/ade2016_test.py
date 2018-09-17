@@ -22,23 +22,21 @@ class Ade2016Test(unittest.TestCase):
             'image_width': 224,
             'image_height': 224,
         }
-        dataset = get_ade_segmentation_dataset(mode='val',
+        dataset = get_ade_segmentation_dataset(mode='test',
                                                batch_size=32,
                                                shuffle_buffer_size=100,
-                                               label_image_height=224,
-                                               label_image_width=224,
                                                **dataset_config)
         with tf.Session() as sess:
             sess.run(dataset.iterator.initializer)
             total_cnt = 0
             while True:
                 try:
-                    images, labels = sess.run(dataset.next_batch)
+                    images = sess.run(dataset.next_batch)
                     # print(images.shape, labels.shape)
-                    total_cnt += images.shape[0]
-                    self.assertEqual(images.shape[1], 224)
-                    self.assertEqual(images.shape[2], 224)
-                    self.assertEqual(images.shape[3], 3)
+                    total_cnt += images[0].shape[0]
+                    self.assertEqual(images[0].shape[1], 224)
+                    self.assertEqual(images[0].shape[2], 224)
+                    self.assertEqual(images[0].shape[3], 3)
                 except OutOfRangeError:
                     break
         print('total cnt is', total_cnt)
@@ -54,16 +52,21 @@ class Ade2016Test(unittest.TestCase):
             'random_distort_color_flag': True,
             'distort_color_fast_mode_flag': False,
 
-            'crop_type': CropType.no_crop,
-            'image_width': 224,
-            'image_height': 224,
+            'crop_type': CropType.random_normal,
+            'image_width': 384,
+            'image_height': 384,
+            'crop_height': 224,
+            'crop_width': 224,
         }
         val_configs = {
             'norm_fn_first': norm_zero_to_one,
             'norm_fn_end': norm_minus_one_to_one,
-            'crop_type': CropType.no_crop,
-            'image_width': 224,
-            'image_height': 224,
+
+            'crop_type': CropType.random_normal,
+            'image_width': 384,
+            'image_height': 384,
+            'crop_height': 224,
+            'crop_width': 224,
         }
         dataset = get_ade_segmentation_merged_dataset(
             train_args=train_configs,
@@ -72,7 +75,6 @@ class Ade2016Test(unittest.TestCase):
             shuffle_buffer_size=100,
             prefetch_buffer_size=100,
             repeat=10,
-            label_image_height=224, label_image_width=224,
         )
         with tf.Session() as sess:
             dataset.init(sess)
