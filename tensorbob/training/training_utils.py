@@ -23,8 +23,9 @@ __all__ = ['SecondOrStepTimer',
 
            'create_train_op',
            'create_train_op_v2',
-           'train',
            'create_finetune_train_op',
+
+           'train',
            ]
 _USE_GLOBAL_STEP = 0
 

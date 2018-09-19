@@ -21,7 +21,7 @@ TensorFlow tools
         + `voc2012.py`: VOC2012(classification & segmentation).
         + `ade2016.py`: Scene Parsing Challenge 2016(segmentation).
         + `camvid.py`: Cambridge-driving Labeled Video Database(segmentation).
-+ For more information about dataset, please check [here](dataset/README.md).
++ For more information about dataset, please check [here](tensorbob/dataset/README.md).
 
 ### 1.2. training
 + target:
