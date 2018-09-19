@@ -8,19 +8,19 @@ from tensorbob.training.trainer_utils import learning_rate_exponential_decay, le
     learning_rate_steps_dict
 from tensorbob.utils.metrics_utils import compute_mean_iou_by_confusion_matrix
 
-__all__ = ['Trainer', 'BaseClassificationTrainer', 'BaseSegmentationTrainer']
+__all__ = ['BaseTrainer', 'BaseClassificationTrainer', 'BaseSegmentationTrainer']
 
 
-class Trainer:
+class BaseTrainer:
     def __init__(self,
                  # 基本参数
                  batch_size=32, weight_decay=0.0005, keep_prob=0.8,
 
                  # 学习率相关参数
-                 learning_rate_type=1, learning_rate_start=0.0001,
-                 lr_decay_rate=0.5, lr_decay_steps=40000, lr_staircase=False,  # learning_rate_exponential_decay
-                 steps_to_lr_dict=None, min_lr=0.000001,  # learning_rate_steps_dict
-                 lr_shrink_epochs=3, lr_shrink_by_number=10.0,  # 配合 ValidationDatasetEvaluationHook 衰减学习率
+                 learning_rate_type=0, learning_rate_start=0.0001,
+                 lr_decay_rate=None, lr_decay_steps=None, lr_staircase=None,  # learning_rate_exponential_decay
+                 steps_to_lr_dict=None, min_lr=None,  # learning_rate_steps_dict
+                 lr_shrink_epochs=None, lr_shrink_by_number=None,  # 配合 ValidationDatasetEvaluationHook 衰减学习率
 
                  # 各种路径
                  base_logs_dir='./logs',
@@ -41,14 +41,138 @@ class Trainer:
                  fine_tune_file_path=None,
                  fine_tune_vars_include=None,
                  fine_tune_vars_exclude=None,
-
                  ):
+        """
+        设定基本训练流程
+
+        参数举例如下
+        {
+            'batch_size': 32,
+            'weight_decay': 0.0005,
+            'keep_prob': 0.8,
+
+            'learning_rate_type': 0,
+            'learning_rate_start': 0.0001,
+            'lr_decay_rate': None,
+            'lr_decay_steps': None,
+            'lr_staircase': None,
+            'steps_to_lr_dict': None,
+            'min_lr': None,
+            'lr_shrink_epochs': None,
+            'lr_shrink_by_number': None,
+
+            'base_logs_dir': './logs'
+            'val_logs_dir': 'val',
+
+            'metrics_reset_ops_collection': 'reset_ops',
+
+            'logging_every_n_steps': 1000,
+            'summary_every_n_steps': 1000,
+            'save_every_n_steps': 1000,
+            'evaluate_every_n_steps': 10000,
+            'max_steps': None,
+
+            'fine_tune_steps': None,
+            'fine_tune_file_path': None,
+            'fine_tune_vars_include': None,
+            'fine_tune_vars_exclude': None,
+
+        }
+
+        已实现的功能：
+        1. `_get_learning_rate`: 获取学习率，根据 learning_rate_type 来获取不同类型学习率：
+            0: 固定学习率为 learning_rate_start。
+            1: tf.train.exponential_decay(learning_rate_start, global_step,
+                                          lr_decay_steps, lr_decay_rate, lr_staircase)
+            2: 根据 steps_to_lr_dict, min_lr 获取学习率。
+               如 steps_to_lr_dict = {100: 0.001, 50000: 0.0001}, min_lr = 0.00001
+               则 global_step 为[0, 100]时学习率为 0.001，(100, 50000]时学习率为 0.0001，(50000, inf]时学习率为 0.00001
+            3：若连续 lr_shrink_epochs 次验证集测试最佳性能指标不提升，则将衰减学习率为之前的 1/lr_shrink_by_number
+               具体实现方式如下：
+               获取 tf.get_variable('learning_rate/learning_rate_start')，初始值为 learning_rate_start，数值不变。
+               获取 tf.get_variable('learning_rate/learning_rate_shrink')，初始值为 1，
+               通过 ValidationDatasetEvaluationHook 更新数值。
+               学习率通过上述两值相除计算。
+        2. `_get_hooks`：获取两个Hook。
+            InitFnHook：获取数据集的 string_handle，初始化训练集。
+            ValidationDatasetEvaluationHook：定期再验证机上评估性能指标。
+        3. `_get_train_op`：获取训练模型所需的op。
+        4. `_get_train_feed_fn`：获取训练所需的 feed_dict
+                                 主要包括 self._ph_is_training 和数据集选择相关的 self._merged_dataset.ph_handle.
+        5. `_get_scaffold`：获取 tf.train.Scaffold 对象。
+                            默认配合 `_get_fine_tune_init_fn()` 和 `_get_fine_tune_var_dict()` ，导入 fine tune 模型。
+                            在前者中使用 fine_tune_vars_include 和 fine_tune_vars_exclude 选择当前计算图中需要导入参数的变量
+                            后者（未实现）返回map，key为 ckpt 文件中变量名（str），value为当前计算图中的变量对象（tf.Variable）
+
+
+
+
+        需要实现的功能
+        1. `_get_merged_dataset`：构建数据集，即创建 MergedDataset 对象（该数据集包括训练集与验证集）。
+        2. `_get_optimizer`：获取优化器，一般会用到 `self._get_learning_rate()` 获取学习率。
+        3. `_get_model`：获取模型，返回值包括 logits 和 end_points，一般会使用到 `self._x` 作为输入。
+        4. `_get_loss`：获取损失函数，返回总损失函数，一般会用到 `self._y` 作为标签
+        5. `_get_metrics`：返回一系列性能指标，其中第一个性能指标为主指标，要求数值越大性能最优。
+                           由[summary_metrics_ops], [update_metrics_ops], [after_reset_update_metrics_ops]组成
+                           summary_metrics_ops 由 tf.metrics 第一个返回值组成
+                           update_metrics_ops 由 tf.metrics 的第二个返回值组成
+                           after_reset_update_metrics_ops 需要先将 tf.get_collection(tf.GraphKeys.METRIC_VARIABLES) 清零，
+                                再调用 update_metrics_ops
+
+
+        训练流程：
+        1. 获取训练集，`_get_merged_dataset`。
+        2. 获取模型，`_get_model`。
+        3. 计算损失函数，`_get_loss`。
+        4. 获取优化器，`_get_optimizer`。
+        5. 获取性能指标，`_get_metrics`。
+        6. 构建train_op，`_get_train_op`。
+        7. 构建hooks，`_get_hooks`，包括数据集初始化功能，和验证集评估功能。
+        8. 构建scaffold，`_get_scaffold`，包括 fine-tune 模型获取。
+        9. 开始训练：
+            + 运行 scaffold 函数中的 init_op, init_fn（如果有的话）。
+            + 判断 base_logs_dir 中是否存在ckpt文件，由的话先restore。
+            + 正常训练（包括train_op，summary，save，logging，validation），具体参考 `training_utils.py` 中的 `train`函数。
+
+        :param batch_size:
+        :param weight_decay:
+        :param keep_prob:
+
+        学习率相关参数请参考 _get_learning_rate 函数注释
+        :param learning_rate_type:
+        :param learning_rate_start:
+        :param lr_decay_rate:
+        :param lr_decay_steps:
+        :param lr_staircase:
+        :param steps_to_lr_dict:
+        :param min_lr:
+        :param lr_shrink_epochs:
+        :param lr_shrink_by_number:
+        :param base_logs_dir:
+        :param val_logs_dir:
+
+        :param metrics_reset_ops_collection:
+
+        # steps 相关参数请参考 train 函数注释
+        :param logging_every_n_steps:
+        :param summary_every_n_steps:
+        :param save_every_n_steps:
+        :param evaluate_every_n_steps:
+
+        :param max_steps:                       最大steps
+        :param fine_tune_steps:                 暂时没用
+        :param fine_tune_file_path:             string类型，ckpt文件路径
+        :param fine_tune_vars_include:          list类型，当前特征图中需要的 scope
+        :param fine_tune_vars_exclude:          list类型，当前特征图中不需要的 scope
+        """
+        # 各种 steps 参数
         self._logging_every_n_steps = logging_every_n_steps
         self._summary_every_n_steps = summary_every_n_steps
         self._save_every_n_steps = save_every_n_steps
         self._evaluate_every_n_steps = evaluate_every_n_steps
         self._max_steps = max_steps
 
+        # 日志路径参数
         self._base_logs_dir = base_logs_dir
         self._val_logs_dir = val_logs_dir
 
@@ -58,10 +182,12 @@ class Trainer:
         self._metrics_update_after_reset_ops = None
         self._metrics_summary_ops = None
 
+        # 训练参数
         self._batch_size = batch_size
         self._weight_decay = weight_decay
         self._keep_prob = keep_prob
 
+        # 学习率相关参数
         self._learning_rate_type = learning_rate_type
         self._learning_rate_start = learning_rate_start
         self._lr_decay_rate = lr_decay_rate
@@ -72,28 +198,39 @@ class Trainer:
         self._lr_shrink_epochs = lr_shrink_epochs
         self._lr_shrink_by_number = lr_shrink_by_number
 
+        # fine tune 相关参数
         self._fine_tune_steps = fine_tune_steps
         self._fine_tune_file_path = fine_tune_file_path
         self._fine_tune_vars_include = fine_tune_vars_include
         self._fine_tune_vars_exclude = fine_tune_vars_exclude
 
+        # 其他需要初始化的参数
         self._ph_is_training = tf.placeholder(tf.bool, name='is_training')
         self._merged_dataset = None
         self._main_metric = None
         self._x = None
         self._y = None
+        self._end_points = None
 
     def _get_merged_dataset(self):
         """
-        MergedDataset 实例
-        :return:    MergedDataset
+        获取数据集
+        :return:    MergedDataset 对象
         """
         raise NotImplementedError
 
     def _get_optimizer(self):
+        """
+        获取优化器
+        :return:
+        """
         raise NotImplementedError
 
     def _get_model(self):
+        """
+        获取模型
+        :return:    返回 logits 和 end_points
+        """
         raise NotImplementedError
 
     def _get_loss(self, logits):
@@ -106,8 +243,10 @@ class Trainer:
 
     def _get_metrics(self, logits, total_loss):
         """
-        训练时用到的各种性能指标，用于后续 logging hook
-        list对象，第一个 metrics 为其主要性能指标（如分类任务中的 accuracy，图像分割任务中的 mean IoU）
+        返回三组性能指标，分别时 [summary_metrics_ops], [update_metrics_ops], [after_reset_update_metrics_ops]
+        summary_metrics_ops 由 tf.metrics 第一个返回值组成
+        update_metrics_ops 由 tf.metrics 的第二个返回值组成
+        after_reset_update_metrics_ops 需要先 reset 所有
         :param logits:          _get_model 返回结果
         :param total_loss:      _get_loss 返回结果
         :return:
@@ -135,10 +274,11 @@ class Trainer:
             return [init_fn_hook, validation_hook]
         return [init_fn_hook]
 
-    # TODO: fine tune train ops
     def _get_train_op(self, total_loss, optimizer):
-        global_step = tf.train.get_or_create_global_step()
-        return create_train_op(total_loss, optimizer, global_step,
+        # TODO: fine tune train ops
+        return create_train_op(total_loss=total_loss,
+                               optimizer=optimizer,
+                               global_step=tf.train.get_or_create_global_step(),
                                update_ops=tf.get_collection(tf.GraphKeys.UPDATE_OPS))
         # if self._fine_tune_steps is None:
         #     return create_train_op(total_loss, optimizer, global_step,
@@ -198,13 +338,18 @@ class Trainer:
     def _get_learning_rate(self):
         """
         获取学习率，有三种模式
+        0: 固定学习率，学习率为 learning_rate_start
         1：learning_rate_exponential_decay
         2：到规定 steps 修改 learning rate，参考 learning_rate_steps_dict 函数。
         3：根据验证集结果进行学习率衰减，参考 learning_rate_val_evaluation 函数。
         :return:    学习率
         """
-        if self._learning_rate_type not in [1, 2, 3]:
+        if self._learning_rate_type not in [0, 1, 2, 3]:
             raise ValueError('learning_rate_type must in [1, 2, 3]')
+        if self._learning_rate_type == 0:
+            if self._learning_rate_start is None:
+                raise ValueError('learning rate vars error')
+            self._learning_rate_tensor = self._learning_rate_start
         if self._learning_rate_type == 1:
             if self._learning_rate_start is None \
                     or self._lr_decay_steps is None \
@@ -244,7 +389,7 @@ class Trainer:
         logging.debug('successfully get dataset')
 
         # 建立模型，得到结果
-        logits, end_points = self._get_model()
+        logits, self._end_points = self._get_model()
         logging.debug('successfully getting logits')
 
         # 获取损失函数
@@ -283,43 +428,52 @@ class Trainer:
               )
 
 
-class BaseClassificationTrainer(Trainer):
-    def __init__(self, num_classes=1000,
+class BaseClassificationTrainer(BaseTrainer):
+    def __init__(self, num_classes,
                  **kwargs):
-        # {
-        #     'num_classes': 1000,
-        #
-        #     'batch_size': 32,
-        #     'weight_decay': 0.00005,
-        #     'keep_prob': 0.5,
-        #
-        #     'learning_rate_type': 1,
-        #     'learning_rate_start': 0.001,
-        #     'lr_decay_rate': 0.5,
-        #     'lr_decay_steps': 40000 * 10,
-        #     'lr_staircase': False,
-        #     'steps_to_lr_dict': None,
-        #     'min_lr': 0.000001,
-        #     'lr_shrink_epochs': 3,
-        #     'lr_shrink_by_number': 10.0,
-        #
-        #     'base_logs_dir': 'logs'
-        #     'val_logs_dir': 'val',
-        #
-        #     'metrics_reset_ops_collection': 'reset_ops',
-        #
-        #     'logging_every_n_steps': 1000,
-        #     'summary_every_n_steps': 1000,
-        #     'save_every_n_steps': 1000,
-        #     'evaluate_every_n_steps': 10000,
-        #     'max_steps': None,
-        #
-        #     'fine_tune_steps': None,
-        #     'fine_tune_file_path': None,
-        #     'fine_tune_vars_include': [],
-        #     'fine_tune_vars_exclude': [],
-        #
-        # }
+        """
+        分类任务的基本训练流程
+
+        对 BaseTrainer 的改进：
+        1. 添加了误差 tf.losses.sparse_softmax_cross_entropy
+        2. 添加三个性能指标 mean_per_class_accuracy, accuracy, loss
+
+        kwargs 的举例如下
+        {
+            'batch_size': 32,
+            'weight_decay': 0.0005,
+            'keep_prob': 0.8,
+
+            'learning_rate_type': 0,
+            'learning_rate_start': 0.0001,
+            'lr_decay_rate': None,
+            'lr_decay_steps': None,
+            'lr_staircase': None,
+            'steps_to_lr_dict': None,
+            'min_lr': None,
+            'lr_shrink_epochs': None,
+            'lr_shrink_by_number': None,
+
+            'base_logs_dir': './logs'
+            'val_logs_dir': 'val',
+
+            'metrics_reset_ops_collection': 'reset_ops',
+
+            'logging_every_n_steps': 1000,
+            'summary_every_n_steps': 1000,
+            'save_every_n_steps': 1000,
+            'evaluate_every_n_steps': 10000,
+            'max_steps': None,
+
+            'fine_tune_steps': None,
+            'fine_tune_file_path': None,
+            'fine_tune_vars_include': None,
+            'fine_tune_vars_exclude': None,
+        }
+        :param num_classes:
+        :param kwargs:
+        """
+
         super().__init__(**kwargs)
         self._num_classes = num_classes
 
@@ -363,43 +517,51 @@ class BaseClassificationTrainer(Trainer):
                [after_reset_mean_per_class_accuracy, after_reset_accuracy, after_reset_loss]
 
 
-class BaseSegmentationTrainer(Trainer):
+class BaseSegmentationTrainer(BaseTrainer):
     def __init__(self, num_classes=1000,
                  **kwargs):
-        # {
-        #     'num_classes': 1000,
-        #
-        #     'batch_size': 32,
-        #     'weight_decay': 0.00005,
-        #     'keep_prob': 0.5,
-        #
-        #     'learning_rate_type': 1,
-        #     'learning_rate_start': 0.001,
-        #     'lr_decay_rate': 0.5,
-        #     'lr_decay_steps': 40000 * 10,
-        #     'lr_staircase': False,
-        #     'steps_to_lr_dict': None,
-        #     'min_lr': 0.000001,
-        #     'lr_shrink_epochs': 3,
-        #     'lr_shrink_by_number': 10.0,
-        #
-        #     'base_logs_dir': 'logs'
-        #     'val_logs_dir': 'val',
-        #
-        #     'metrics_reset_ops_collection': 'reset_ops',
-        #
-        #     'logging_every_n_steps': 1000,
-        #     'summary_every_n_steps': 1000,
-        #     'save_every_n_steps': 1000,
-        #     'evaluate_every_n_steps': 10000,
-        #     'max_steps': None,
-        #
-        #     'fine_tune_steps': None,
-        #     'fine_tune_file_path': None,
-        #     'fine_tune_vars_include': [],
-        #     'fine_tune_vars_exclude': [],
-        #
-        # }
+        """
+        图像分割任务的基本训练流程
+
+        对 BaseTrainer 的改进：
+        1. 添加了误差 tf.losses.sparse_softmax_cross_entropy
+        2. 添加三个性能指标 mean_iou, accuracy, loss
+
+        kwargs 举例如下：
+        {
+            'batch_size': 32,
+            'weight_decay': 0.0005,
+            'keep_prob': 0.8,
+
+            'learning_rate_type': 0,
+            'learning_rate_start': 0.0001,
+            'lr_decay_rate': None,
+            'lr_decay_steps': None,
+            'lr_staircase': None,
+            'steps_to_lr_dict': None,
+            'min_lr': None,
+            'lr_shrink_epochs': None,
+            'lr_shrink_by_number': None,
+
+            'base_logs_dir': './logs'
+            'val_logs_dir': 'val',
+
+            'metrics_reset_ops_collection': 'reset_ops',
+
+            'logging_every_n_steps': 1000,
+            'summary_every_n_steps': 1000,
+            'save_every_n_steps': 1000,
+            'evaluate_every_n_steps': 10000,
+            'max_steps': None,
+
+            'fine_tune_steps': None,
+            'fine_tune_file_path': None,
+            'fine_tune_vars_include': None,
+            'fine_tune_vars_exclude': None,
+        }
+        :param num_classes:
+        :param kwargs:
+        """
         super().__init__(**kwargs)
         self._num_classes = num_classes
 

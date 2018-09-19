@@ -8,7 +8,7 @@ from tensorbob.dataset.dataset_utils import CropType
 
 
 class CamVidTest(unittest.TestCase):
-    # @unittest.skip
+    @unittest.skip
     def test_segmentation_dataset(self):
         dataset_config = {
             'norm_fn_first': norm_zero_to_one,

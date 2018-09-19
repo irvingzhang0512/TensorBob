@@ -12,22 +12,32 @@ class BaseDatasetTest(unittest.TestCase):
         d1 = tf.data.Dataset.range(100)
         d2 = tf.data.Dataset.range(5)
         d = MergedDataset(d1, d2)
+        x = d.next_batch
         with tf.Session() as session:
+            # 必须初始化
             d.init(session)
+
+            # 获取训练集
             for i in range(10):
-                self.assertEqual(d.get_next_batch(session, 0), i)
+                self.assertEqual(session.run(x, feed_dict={d.ph_handle: d.handle_strings[0]}), i)
+
+            # 初始化验证集，并获取数据
             session.run(d.tf_dataset_2_iterator.initializer)
             for i in range(5):
-                self.assertEqual(d.get_next_batch(session, 1), i)
+                self.assertEqual(session.run(x, feed_dict={d.ph_handle: d.handle_strings[1]}), i)
+
+            # 获取验证集
             for i in range(10):
-                self.assertEqual(d.get_next_batch(session, 0), i + 10)
+                self.assertEqual(session.run(x, feed_dict={d.ph_handle: d.handle_strings[0]}), i+10)
+
+            # 初始化验证集，并获取数据
             session.run(d.tf_dataset_2_iterator.initializer)
             for i in range(5):
-                self.assertEqual(d.get_next_batch(session, 1), i)
+                self.assertEqual(session.run(x, feed_dict={d.ph_handle: d.handle_strings[1]}), i)
 
     @unittest.skip
     def test_base_dataset(self):
-        file_paths = ['../examples/images/1.jpg', '../examples/images/2.jpg']
+        file_paths = ['./examples/images/1.jpg', './examples/images/2.jpg']
         labels = [0, 1]
         args = {
             'norm_fn_first': norm_zero_to_one,

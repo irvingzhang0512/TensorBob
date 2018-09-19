@@ -51,10 +51,11 @@ class CamVidTrainer(bob.training.BaseSegmentationTrainer):
                                                                self._val_configs,
                                                                batch_size=self._batch_size,
                                                                repeat=self._epochs,
-                                                               shuffle_buffer_size=100)
+                                                               shuffle_buffer_size=1)
 
     def _get_optimizer(self):
-        return tf.train.RMSPropOptimizer(learning_rate=self._get_learning_rate())
+        return tf.train.RMSPropOptimizer(learning_rate=self._get_learning_rate(),
+                                         decay=0.995)
 
     def _get_model(self):
         return bob.segmentation.fc_densenet(self._x,
@@ -62,6 +63,7 @@ class CamVidTrainer(bob.training.BaseSegmentationTrainer):
                                             is_training=self._ph_is_training,
                                             keep_prob=self._keep_prob,
                                             weight_decay=self._weight_decay,
+                                            mode="103",
                                             )
 
     def _get_fine_tune_var_dict(self, variables_to_restore):
@@ -134,35 +136,35 @@ def _parse_arguments(argv):
                         default="E:\\PycharmProjects\\data\\CamVid")
 
     # training configs
-    parser.add_argument('--batch_size', type=int, default=4)  # 必须是3的倍数
-    parser.add_argument('--epochs', type=int, default=10000)
+    parser.add_argument('--batch_size', type=int, default=1)  # 必须是3的倍数
+    parser.add_argument('--epochs', type=int, default=300)
     parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--keep_prob', type=float, default=0.8)
 
     # learning rate
     parser.add_argument('--learning_rate_start', type=float, default=0.001)
     parser.add_argument('--learning_rate_decay_steps', type=int, default=100)
-    parser.add_argument('--learning_rate_decay_rate', type=float, default=0.995)
+    parser.add_argument('--learning_rate_decay_rate', type=float, default=1.)
     parser.add_argument('--learning_rate_staircase', type=bool, default=True)
 
     # model
     parser.add_argument('--image_width', type=int, default=960)
     parser.add_argument('--image_height', type=int, default=720)
-    parser.add_argument('--crop_width', type=int, default=224)
-    parser.add_argument('--crop_height', type=int, default=224)
+    parser.add_argument('--crop_width', type=int, default=448)
+    parser.add_argument('--crop_height', type=int, default=448)
     # parser.add_argument('--fine_tune_file_path', type=str,
     #                     default='E:\\PycharmProjects\\data\\slim\\vgg_16.ckpt')
     # parser.add_argument('--fine_tune_vars_include', type=list, default=['vgg16_fcn_8s/vgg_16'])
     # parser.add_argument('--fine_tune_vars_exclude', type=list, default=['vgg16_fcn_8s/vgg_16/fc8'])
 
     # logs
-    parser.add_argument('--base_logs_dir', type=str, default="./logs-crop", help='')
+    parser.add_argument('--base_logs_dir', type=str, default="./logs-fc-densenet-103", help='')
 
     # steps
-    parser.add_argument('--logging_every_n_steps', type=int, default=10)
-    parser.add_argument('--summary_every_n_steps', type=int, default=10)
-    parser.add_argument('--save_every_n_steps', type=int, default=100)
-    parser.add_argument('--evaluate_every_n_steps', type=int, default=100)
+    parser.add_argument('--logging_every_n_steps', type=int, default=50)
+    parser.add_argument('--summary_every_n_steps', type=int, default=50)
+    parser.add_argument('--save_every_n_steps', type=int, default=400)
+    parser.add_argument('--evaluate_every_n_steps', type=int, default=400)
 
     return parser.parse_args(argv)
 

@@ -3,7 +3,7 @@
 ## 1. 主要功能
 + `BaseDataset`：封装单个`tf.data.Dataset`对象。
 + `MergedDataset`：封装两个`tf.data.Dataset`对象，使用 feedable iterator 来处理这两个实例，用于训练集/验证集。
-+ 提供`get_single_dataset_by_config`方法，根据属性参数（以python dict表示）获取`tf.data.Dataset`实例。
++ `dataset_utils.py`提供`get_single_dataset_by_config`方法，根据属性参数（以python dict表示）获取`tf.data.Dataset`实例。
     + 数据预处理
         + 提供了数据增强方法（中心切片、vgg切片、inception切片、水平镜像、垂直镜像、色彩转换）。
         + 提供了数据预处理方法（减去ImageNet平均数，归一化到[0, 1]或[-1, 1]）。
@@ -12,6 +12,13 @@
         + 根据一系列图片的file_path来获取数据集。
         + 根据一系列图片的分类标签（数字）来获取数据集。
         + 根据一系列图片（图像分割标签）的file_path来获取数据集。
++ `segmentation_dataset_utils.py`提供了：
+    + `get_segmentation_dataset_config`：用于下面函数，获取 `MergedDataset` 对象。
+    + `get_segmentation_dataset`：用于获取图像分割数据集。
+        + 为什么不用`dataset_utils.py`中的相关方法？
+            + 因为该方法只能获取单个对象的 tf.data.Dataset，而不能同时获取 图像与标签，导致不能进行部分图像增强操作。
+        + 实现的图像增强功能：镜像，切片等。
+        
 
 ## 2. Datasets
 
@@ -52,5 +59,7 @@
 + `voc2012.py`
 
 ### 2.3. ADEChallenge
++ `ade2016_test.py`
 
 ### 2.4. CamVid
++ `camvid.py`

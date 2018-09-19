@@ -5,7 +5,10 @@ from nets import nets_factory
 
 __all__ = ['learning_rate_exponential_decay',
            'learning_rate_steps_dict',
-           'learning_rate_val_evaluation']
+           'learning_rate_val_evaluation',
+           'scaffold_pre_trained_model',
+           'model_from_slim_nets_factory',
+           ]
 
 
 def learning_rate_exponential_decay(learning_rate,
@@ -86,6 +89,13 @@ def learning_rate_val_evaluation(learning_rate_start):
 def scaffold_pre_trained_model(pre_trained_model_path,
                                vars_include_list=None,
                                vars_exclude_list=None):
+    """
+    要求当前模型与ckpt模型中，参数名称一致
+    :param pre_trained_model_path:
+    :param vars_include_list:
+    :param vars_exclude_list:
+    :return:
+    """
     if pre_trained_model_path is None:
         raise ValueError('pre-trained model path must not be None')
 
@@ -109,10 +119,20 @@ def model_from_slim_nets_factory(model_name,
                                  weight_decay,
                                  is_training,
                                  **kwargs):
-        network_fn = nets_factory.get_network_fn(model_name,
-                                                 num_classes=num_classes,
-                                                 weight_decay=weight_decay,
-                                                 is_training=is_training,
-                                                 )
-        return network_fn(images=inputs, **kwargs)
+    """
+    获取 slim.model 获取数据，具体参数可以参考 slim 的文档。
+    :param model_name:
+    :param inputs:
+    :param num_classes:
+    :param weight_decay:
+    :param is_training:
+    :param kwargs:
+    :return: 一般分为两部分，logits 和 end_points
+    """
+    network_fn = nets_factory.get_network_fn(model_name,
+                                             num_classes=num_classes,
+                                             weight_decay=weight_decay,
+                                             is_training=is_training,
+                                             )
+    return network_fn(images=inputs, **kwargs)
 

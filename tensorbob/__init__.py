@@ -1,5 +1,4 @@
 from tensorbob.utils import preprocessing
-from tensorbob.utils import initializers
 from tensorbob.utils import regularizers
 from tensorbob.utils import variables
 from tensorbob.utils import metrics_utils

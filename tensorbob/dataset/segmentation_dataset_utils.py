@@ -67,8 +67,33 @@ def get_segmentation_dataset(dataset_configs,
                              prefetch_buffer_size=100,
                              ):
     """
-    获取数据分割数据集
+    获取图像分割数据集
     要求：图片与标签的尺寸相同
+    实现的图像增强功能：镜像、随机切片
+
+    dataset_configs = {
+        # 公共属性
+        'random_flip_horizontal_flag': False,
+        'random_flip_vertical_flag': False,
+        'crop_type': bob.data.CropType.no_crop,
+        'image_width': None,
+        'image_height': None,
+        'crop_width': None,
+        'crop_height': None,
+
+        # 标签特有属性
+        'labels_paths': [],
+        'color_to_int_list': None,
+        'label_in_channels': 3,
+
+        # 输入特有属性
+        'images_paths': [],
+        'norm_fn_first': None,
+        'norm_fn_end': None,
+        'random_distort_color_flag': False,
+        'distort_color_fast_mode_flag': False,
+    }
+
     :param dataset_configs:
     :param epochs:
     :param batch_size:
