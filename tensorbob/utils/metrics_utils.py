@@ -1,5 +1,8 @@
 import tensorflow as tf
 
+__all__ = ['compute_mean_iou',
+           'compute_mean_iou_by_confusion_matrix']
+
 
 def compute_mean_iou_by_confusion_matrix(name, total_cm):
     with tf.variable_scope('compute_mean_iou_by_confusion_matrix'):
