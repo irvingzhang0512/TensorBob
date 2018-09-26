@@ -284,12 +284,12 @@ class SummarySaverHookV2(tf.train.SessionRunHook):
         self._save_steps = save_steps
         self._global_step_tensor = tf.train.get_or_create_global_step()
 
-        if summary_op:
+        if summary_op is not None:
             self._summary_op = summary_op
         else:
             self._summary_op = tf.summary.merge_all()
 
-        if summary_writer:
+        if summary_writer is not None:
             self._summary_writer = summary_writer
         else:
             self._summary_writer = tf.summary.FileWriter(output_dir, tf.get_default_graph())
