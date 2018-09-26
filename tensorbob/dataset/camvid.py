@@ -61,7 +61,7 @@ def get_camvid_segmentation_dataset(mode='train',
     :return:
     """
     if mode not in MODES:
-        raise ValueError('unknown mode {}, must be train, val or test.'.format())
+        raise ValueError('unknown mode {}, must be train, val or test.'.format(mode))
     if image_configs is None:
         image_configs = {}
 

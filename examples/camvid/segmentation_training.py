@@ -49,8 +49,6 @@ def get_dataset():
     return bob.data.get_camvid_segmentation_merged_dataset(train_configs, val_configs,
                                                            batch_size=BATCH_SIZE,
                                                            repeat=EPOCHS,
-                                                           label_image_height=IMAGE_SIZE,
-                                                           label_image_width=IMAGE_SIZE,
                                                            shuffle_buffer_size=100)
 
 
