@@ -326,6 +326,7 @@ class InitFnHook(tf.train.SessionRunHook):
 
 def train(train_op,
           logs_dir,  # pre-trained model
+          session_config=None,  # tf.ConfigProto()
           scaffold=None,
           hooks=None,  # other hooks
           max_steps=None,  # StopAtStepHook
@@ -364,10 +365,11 @@ def train(train_op,
     3. 自己还可以创建 hooks。
 
     :param train_op:                运行该 op 用于训练
-    :param logs_dir:                指定为所有日志文件的根目录，运行时会先从该文件夹下进行restore，并保存训练 summary 数据。
-    :param scaffold:                用于指定一些基本参数，如 init_fn，init_op等，可用于导入 fine_tune 模型参数。
-    :param hooks:                   可以自己创建一些 hooks。
-    :param max_steps:               训练 global_step 的上限。
+    :param logs_dir:                指定日志文件的目录，运行时会先从该文件夹下进行restore，并保存训练 summary 数据
+    :param session_config:          session的配置
+    :param scaffold:                用于指定一些基本参数，如 init_fn，init_op等，可用于导入 fine_tune 模型参数
+    :param hooks:                   可以自己创建一些 hooks
+    :param max_steps:               训练 global_step 的上限
     :param logging_every_n_steps:   是否需要在console中打印数据
     :param logging_tensors:         需要打印的数据
     :param feed_fn:                 获取训练时所需的 feed_dict，无形参
@@ -423,6 +425,7 @@ def train(train_op,
 
     if hooks:
         all_hooks += hooks
-    with tf.train.SingularMonitoredSession(hooks=all_hooks, scaffold=scaffold, checkpoint_dir=logs_dir) as sess:
+    with tf.train.SingularMonitoredSession(hooks=all_hooks, scaffold=scaffold,
+                                           checkpoint_dir=logs_dir, config=session_config) as sess:
         while not sess.should_stop():
             sess.run(train_op)
