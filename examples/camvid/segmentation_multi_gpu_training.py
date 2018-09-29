@@ -155,7 +155,8 @@ if __name__ == '__main__':
 
         # get grads for each GPU, cal mean grads, get train op
         grads = average_gradients(grads_list)
-        train_op = optimizer.apply_gradients(grads, global_step=global_step)
+        with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+            train_op = optimizer.apply_gradients(grads, global_step=global_step)
 
         # metrics
         total_logits = tf.concat(logits_list, axis=0, name='logits')

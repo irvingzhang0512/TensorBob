@@ -87,7 +87,7 @@ def fc_densenet(x,
                             weights_initializer=tf.keras.initializers.he_normal(),
                             ):
             with slim.arg_scope([slim.conv2d, slim.max_pool2d], padding='SAME'):
-                with slim.arg_scope([slim.batch_norm],
+                with slim.arg_scope([slim.batch_norm, slim.dropout],
                                     is_training=is_training):
                     end_points = {}
                     skip_connections = []
