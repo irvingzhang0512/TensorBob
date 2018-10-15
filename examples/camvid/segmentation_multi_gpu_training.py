@@ -1,3 +1,4 @@
+# coding=utf-8
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
@@ -66,6 +67,7 @@ def get_logits_and_loss(scope, cur_x, cur_y, is_training, ):
                                                  mode="67", )
     tf.losses.sparse_softmax_cross_entropy(labels=cur_y, logits=cur_logits)
     losses = tf.get_collection(tf.GraphKeys.LOSSES, scope)
+    losses.append(tf.losses.get_regularization_loss(scope=scope))
     return cur_logits, tf.add_n(losses, name='total_loss')
 
 

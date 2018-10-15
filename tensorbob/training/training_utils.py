@@ -1,3 +1,4 @@
+# coding=utf-8
 import tensorflow as tf
 from tensorflow.python.training.basic_session_run_hooks import *
 from tensorflow.contrib.training.python.training.training import create_train_op
@@ -43,7 +44,7 @@ def create_train_op_v2(total_loss,
                        colocate_gradients_with_ops=False,
                        check_numerics=True):
     """
-    supoort update_ops after train_op
+    support update_ops after train_op
 
     """
     train_op = create_train_op(total_loss=total_loss,
