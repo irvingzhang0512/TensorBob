@@ -1,3 +1,4 @@
+# coding=utf-8
 import tensorflow as tf
 import tensorbob as bob
 from nets import inception_resnet_v2
@@ -10,6 +11,10 @@ import tensorflow.contrib.slim as slim
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 from tensorflow.python.platform import tf_logging as logging
 
+
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 logging.set_verbosity(logging.DEBUG)
 
 
@@ -20,14 +25,23 @@ def create_dataset(args):
             g_img = tf.image.decode_png(tf.read_file(base_file_name + '_green.png'), channels=1)
             b_img = tf.image.decode_png(tf.read_file(base_file_name + '_blue.png'), channels=1)
             y_img = tf.image.decode_png(tf.read_file(base_file_name + '_yellow.png'), channels=1)
-
             r_img += tf.cast((y_img / 2), tf.uint8)
             g_img += tf.cast((y_img / 2), tf.uint8)
-
             img = tf.concat((r_img, g_img, b_img), axis=2)
-
+            img = tf.image.convert_image_dtype(img, tf.float32)
             img = tf.image.resize_images(img, (args.image_height, args.image_width))
-            return tf.image.convert_image_dtype(img, tf.float32, name='input_images') * 2.0 - 1.0
+            return img * 2.0 - 1.0
+
+        def _image_augumentation(image):
+            image = (image + 1.0)/2.0
+            image = tf.image.random_brightness(image, max_delta=32. / 255.)
+            image = tf.image.random_saturation(image, lower=0.5, upper=1.5)
+            image = tf.image.random_hue(image, max_delta=0.2)
+            image = tf.image.random_contrast(image, lower=0.5, upper=1.5)
+            image = tf.image.random_flip_left_right(image)
+            image = tf.image.random_flip_up_down(image)
+            image = tf.image.rot90(image, tf.random_uniform([], maxval=4, dtype=tf.int32))
+            return image * 2.0 - 1.0
 
         def _get_label_ndarays(label_strs):
             cur_labels = []
@@ -43,11 +57,18 @@ def create_dataset(args):
             image_names = df['Id']
             image_labels = df['Target']
 
+            # shuffle
+            ids = np.arange(len(image_names))
+            np.random.shuffle(ids)
+            raw_image_names = image_names[ids]
+            raw_image_labels = image_labels[ids]
+
             # train set
-            label_dataset = tf.data.Dataset.from_tensor_slices(_get_label_ndarays(image_labels[:-args.val_size]))
+            label_dataset = tf.data.Dataset.from_tensor_slices(_get_label_ndarays(raw_image_labels[:-args.val_size]))
             image_names = [os.path.join(args.data_root_path, args.mode, image_name)
-                           for image_name in image_names[:-args.val_size]]
-            image_dataset = tf.data.Dataset.from_tensor_slices(image_names).map(_parse_rgby_images)
+                           for image_name in raw_image_names[:-args.val_size]]
+            image_dataset = tf.data.Dataset.from_tensor_slices(image_names)\
+                .map(_parse_rgby_images).map(_image_augumentation)
             train_set = bob.dataset.BaseDataset(dataset=tf.data.Dataset.zip((image_dataset, label_dataset)),
                                                 dataset_size=len(image_names) - args.val_size,
                                                 batch_size=args.batch_size,
@@ -57,9 +78,9 @@ def create_dataset(args):
                                                 )
 
             # val set
-            label_dataset = tf.data.Dataset.from_tensor_slices(_get_label_ndarays(image_labels[-args.val_size:]))
+            label_dataset = tf.data.Dataset.from_tensor_slices(_get_label_ndarays(raw_image_labels[-args.val_size:]))
             image_names = [os.path.join(args.data_root_path, args.mode, image_name) for image_name in
-                           image_names[-args.val_size:]]
+                           raw_image_names[-args.val_size:]]
             image_dataset = tf.data.Dataset.from_tensor_slices(image_names).map(_parse_rgby_images)
             val_set = bob.dataset.BaseDataset(dataset=tf.data.Dataset.zip((image_dataset, label_dataset)),
                                               dataset_size=args.val_size,
@@ -94,15 +115,70 @@ def get_model(x, args, is_training=False, ):
                                                        activation_fn=tf.nn.relu)
 
 
-def get_loss(logits, labels):
+def focal_loss(logits, labels, alpha=0.25, gamma=2):
+    """Compute focal loss for predictions.
+        Multi-labels Focal loss formula:
+            FL = -alpha * (z-p)^gamma * log(p) -(1-alpha) * p^gamma * log(1-p)
+                 ,which alpha = 0.25, gamma = 2, p = sigmoid(x), z = target_tensor.
+    Args:
+     logits: A float tensor of shape [batch_size, num_anchors,
+        num_classes] representing the predicted logits for each class
+     labels: A float tensor of shape [batch_size, num_anchors,
+        num_classes] representing one-hot encoded classification targets
+     weights: A float tensor of shape [batch_size, num_anchors]
+     alpha: A scalar tensor for focal loss alpha hyper-parameter
+     gamma: A scalar tensor for focal loss gamma hyper-parameter
+    Returns:
+        loss: A (scalar) tensor representing the value of the loss function
+    """
+    sigmoid_p = tf.nn.sigmoid(logits)
+    labels = tf.cast(labels, tf.float32)
+    zeros = tf.zeros_like(sigmoid_p, dtype=sigmoid_p.dtype)
+
+    # For poitive prediction, only need consider front part loss, back part is 0;
+    # target_tensor > zeros <=> z=1, so poitive coefficient = z - p.
+    pos_p_sub = tf.where(labels > zeros, labels - sigmoid_p, zeros)
+
+    # For negative prediction, only need consider back part loss, front part is 0;
+    # target_tensor > zeros <=> z=1, so negative coefficient = 0.
+    neg_p_sub = tf.where(labels > zeros, zeros, sigmoid_p)
+    per_entry_cross_ent = - alpha * (pos_p_sub ** gamma) * tf.log(tf.clip_by_value(sigmoid_p, 1e-8, 1.0)) \
+                          - (1 - alpha) * (neg_p_sub ** gamma) * tf.log(tf.clip_by_value(1.0 - sigmoid_p, 1e-8, 1.0))
+    cur_loss = tf.reduce_sum(per_entry_cross_ent)
+    tf.losses.add_loss(cur_loss)
+    return cur_loss
+
+
+def f1_loss(y_true, y_pred, threshold):
+    with tf.variable_scope('f1_loss'):
+        y_true = tf.cast(y_true, tf.float32)
+        y_pred = tf.cast(tf.greater(tf.cast(y_pred, tf.float32), threshold), tf.float32)
+        tp = tf.reduce_sum(tf.cast(y_true * y_pred, tf.float32), axis=0)
+        tn = tf.reduce_sum(tf.cast((1 - y_true) * (1 - y_pred), tf.float32), axis=0)
+        fp = tf.reduce_sum(tf.cast((1 - y_true) * y_pred, tf.float32), axis=0)
+        fn = tf.reduce_sum(tf.cast(y_true * (1 - y_pred), tf.float32), axis=0)
+
+        p = tp / (tp + fp + 1e-7)
+        r = tp / (tp + fn + 1e-7)
+
+        f1 = 2 * p * r / (p + r + 1e-7)
+        f1 = tf.where(tf.is_nan(f1), tf.zeros_like(f1), f1)
+        cur_loss = 1 - tf.reduce_mean(f1)
+        tf.losses.add_loss(cur_loss)
+        return cur_loss
+
+
+def get_loss(logits, labels, args):
     tf.losses.sigmoid_cross_entropy(multi_class_labels=labels, logits=logits)
+    # f1_loss(labels, tf.sigmoid(logits), args.sigmoid_threshold)
+    focal_loss(logits, labels)
     return tf.losses.get_total_loss()
 
 
 def fbeta_score_macro(y_true, y_pred, beta=1, threshold=0.1):
     # https://www.kaggle.com/guglielmocamporese/macro-f1-score-keras
-    y_true = tf.cast(y_true, 'float32')
-    y_pred = tf.cast(tf.greater(tf.cast(y_pred, 'float32'), threshold), 'float32')
+    y_true = tf.cast(y_true, tf.float32)
+    y_pred = tf.cast(tf.greater(tf.cast(y_pred, tf.float32), threshold), tf.float32)
 
     tp = tf.reduce_sum(y_true * y_pred, axis=0)
     fp = tf.reduce_sum((1 - y_true) * y_pred, axis=0)
@@ -189,7 +265,7 @@ def train(args):
     logits, end_points = get_model(input_images, args, ph_is_training)
 
     # 构建train_op
-    total_loss = get_loss(logits, input_labels)
+    total_loss = get_loss(logits, input_labels, args)
     optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate_start)
     train_op = bob.training.create_train_op(total_loss,
                                             optimizer,
@@ -265,12 +341,10 @@ def _parse_arguments(argv):
     parser.add_argument('--mode', type=str, default="train")
     parser.add_argument('--num_classes', type=int, default=28)
     parser.add_argument('--sigmoid_threshold', type=float, default=0.5)
-    parser.add_argument('--data_root_path', type=str,
-                        default="/home/tensorflow05/data/kaggle/protein")
-    parser.add_argument('--train_csv_file_name', type=str,
-                        default="train.csv")
-    parser.add_argument('--submission_csv_file_name', type=str,
-                        default="sample_submission.csv")
+    parser.add_argument('--data_root_path', type=str, default="/home/tensorflow05/data/kaggle/protein")
+    # parser.add_argument('--data_root_path', type=str, default="/ssd/zhangyiyang/protein")
+    parser.add_argument('--train_csv_file_name', type=str, default="train.csv")
+    parser.add_argument('--submission_csv_file_name', type=str, default="sample_submission.csv")
     parser.add_argument('--image_height', type=int, default=299)
     parser.add_argument('--image_width', type=int, default=299)
 
@@ -283,6 +357,8 @@ def _parse_arguments(argv):
     parser.add_argument('--shuffle_buffer_size', type=int, default=1000)
     parser.add_argument('--pretrained_model_path', type=str,
                         default="/home/tensorflow05/data/pre-trained/slim/inception_resnet_v2_2016_08_30.ckpt")
+    # parser.add_argument('--pretrained_model_path', type=str,
+    #                     default="/ssd/zhangyiyang/slim/inception_resnet_v2_2016_08_30.ckpt")
 
     # training steps configs
     parser.add_argument('--logging_every_n_steps', type=int, default=100)
@@ -297,8 +373,8 @@ def _parse_arguments(argv):
     parser.add_argument('--learning_rate_staircase', type=bool, default=False)
 
     # training logs configs
-    parser.add_argument('--logs_dir', type=str, default="./logs/", help='')
-    parser.add_argument('--val_logs_dir', type=str, default="./logs/val/", help='')
+    parser.add_argument('--logs_dir', type=str, default="./logs-focal-loss-aug/", help='')
+    parser.add_argument('--val_logs_dir', type=str, default="./logs-focal-loss-aug/val/", help='')
 
     # test configs
     parser.add_argument('--trained_model', type=str, default="./logs/val/model.ckpt-4000", help='')
