@@ -420,8 +420,20 @@ def test(args):
         except OutOfRangeError:
             pass
 
-        from datetime import datetime
-        file_name = "./res_{}.csv".format(datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M"))
+    from datetime import datetime
+    file_name = "./res_{}.csv".format(datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M"))
+
+    if args.add_leak_data:
+        leak_data_df = pd.read_csv(args.leak_data_file_path)
+        leak_data_df.drop(['Extra', 'SimR', 'SimG', 'SimB', 'Target_noisey'], axis=1, inplace=True)
+        leak_data_df.columns = ['Id', 'Leak']
+        leak_data_df = leak_data_df.set_index('Id')
+        df = df.set_index('Id')
+        for cur_index in leak_data_df.index:
+            if cur_index in df.index:
+                df.loc[cur_index].Predicted = leak_data_df.loc[cur_index].Leak
+        df.to_csv(file_name)
+    else:
         df.to_csv(file_name, index=False)
 
 
@@ -565,7 +577,9 @@ def _parse_arguments(argv):
 
     # test configs
     parser.add_argument('--trained_model', type=str,
-                        default="./logs-inception-v3-ce-mse-2/val/model.ckpt-1000", help='')
+                        default="./logs-inception-v3-ce-mse-2/val/model.ckpt-48600", help='')
+    parser.add_argument('--add_leak_data', type=bool, default=True, help='')
+    parser.add_argument('--leak_data_file_path', type=str, default="/ssd/zhangyiyang/protein/leak_data.csv", help='')
 
     return parser.parse_args(argv)
 
