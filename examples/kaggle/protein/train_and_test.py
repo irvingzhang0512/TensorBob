@@ -12,9 +12,10 @@ from tensorflow.python.framework.errors_impl import OutOfRangeError
 from tensorflow.python.platform import tf_logging as logging
 from protein_utils import focal_loss, focal_loss_v2, fbeta_score_macro, f1_loss
 from protein_data import create_dataset
+import sklearn
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 logging.set_verbosity(logging.DEBUG)
 
@@ -41,13 +42,13 @@ def get_encoder_decoder_model(x, args, is_training):
         x = tf.concat(axis=3, values=channels[:3])
 
     if args.model == 'inception_v3':
-        return get_inception_v3_model(x, args, is_training, args.model_out_channels)
+        return get_inception_v3_model(x, args, is_training)
     elif args.model == 'inception_resnet_v2':
-        return get_inception_resnet_v2_model(x, args, is_training, args.model_out_channels)
+        return get_inception_resnet_v2_model(x, args, is_training)
     elif args.model == 'resnet_v2_50':
-        return get_resnet_v2_50_model(x, args, is_training, args.model_out_channels)
+        return get_resnet_v2_50_model(x, args, is_training)
     elif args.model == 'densenet':
-        return get_densenet_model(x, args, is_training, args.model_out_channels)
+        return get_densenet_model(x, args, is_training)
     else:
         raise ValueError('Unknown model {}'.format(args.model))
 
@@ -80,7 +81,8 @@ def get_classifier_and_reconstruction_loss(args,
         elif args.model_out_channels == 1:
             channels = tf.split(axis=3, num_or_size_splits=4, value=raw_images)
             raw_images = channels[3]
-        reconstruction_loss = tf.losses.mean_squared_error(predictions=reconstruct_image, labels=raw_images)
+        reconstruction_loss = tf.losses.mean_squared_error(predictions=reconstruct_image, labels=raw_images,
+                                                           weights=0.1)
         merged_list.append(tf.summary.scalar('reconstruction_loss', reconstruction_loss))
         merged_list.append(tf.summary.image('raw_image', raw_images))
         merged_list.append(tf.summary.image('reconstgruct_image', reconstruct_image))
@@ -118,7 +120,7 @@ def evaluate(args):
     # 构建模型
     ph_is_training = tf.placeholder(tf.bool)
     reconstruct_image, logits, end_points = get_encoder_decoder_model(input_images, args,
-                                                                      is_training=ph_is_training,)
+                                                                      is_training=ph_is_training, )
 
     n_sigmoid = tf.nn.sigmoid(logits)
     pred = n_sigmoid > thresholds
@@ -157,7 +159,7 @@ def test(args):
     # 构建模型
     ph_is_training = tf.placeholder(tf.bool)
     reconstruct_image, logits, end_points = get_encoder_decoder_model(input_images, args,
-                                                                      is_training=ph_is_training,)
+                                                                      is_training=ph_is_training, )
     logits_sigmoids = tf.sigmoid(logits)
     predictions = tf.cast(logits_sigmoids >= thresholds, tf.int32)
 
@@ -180,7 +182,7 @@ def test(args):
             except OutOfRangeError:
                 pass
         from datetime import datetime
-        file_name = "./{}_{}.csv".format(args.model, datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M"))
+        file_name = "./{}_{}".format(args.model, datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M"))
     else:
         total_sigmoids = None
         for i in range(args.k_folds):
@@ -213,21 +215,51 @@ def test(args):
         df['Predicted'] = submissions
 
         from datetime import datetime
-        file_name = "./{}_ensemble_{}_folds_{}.csv".format(args.model, args.k_folds,
-                                                           datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M"))
+        file_name = "./{}_ensemble_{}_folds_{}".format(args.model, args.k_folds,
+                                                       datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M"))
+    # without leak data
+    df.to_csv(file_name + '_without_leak_data.csv', index=False)
 
-    if args.add_leak_data:
-        leak_data_df = pd.read_csv(args.leak_data_file_path)
-        leak_data_df.drop(['Extra', 'SimR', 'SimG', 'SimB', 'Target_noisey'], axis=1, inplace=True)
-        leak_data_df.columns = ['Id', 'Leak']
-        leak_data_df = leak_data_df.set_index('Id')
-        df = df.set_index('Id')
-        for cur_index in leak_data_df.index:
-            if cur_index in df.index:
-                df.loc[cur_index].Predicted = leak_data_df.loc[cur_index].Leak
-        df.to_csv(file_name)
-    else:
-        df.to_csv(file_name, index=False)
+    # with leak data
+    leak_data_df = pd.read_csv(args.leak_data_file_path)
+    leak_data_df.drop(['Extra', 'SimR', 'SimG', 'SimB', 'Target_noisey'], axis=1, inplace=True)
+    leak_data_df.columns = ['Id', 'Leak']
+    leak_data_df = leak_data_df.set_index('Id')
+    df = df.set_index('Id')
+    for cur_index in leak_data_df.index:
+        if cur_index in df.index:
+            df.loc[cur_index].Predicted = leak_data_df.loc[cur_index].Leak
+    df.to_csv(file_name + '_with_leak_data.csv')
+
+
+class F1Hook(tf.train.SessionRunHook):
+    def __init__(self, labels_tensor, predictions_tensor, reset_every_n_steps):
+        self._label_tensor = labels_tensor
+        self._predictions_tensor = predictions_tensor
+        self._reset_every_n_steps = reset_every_n_steps
+        self.cur_predictions = None
+        self.cur_labels = None
+        self.global_step = tf.train.get_or_create_global_step()
+
+    @property
+    def f1(self):
+        if self.cur_predictions is None:
+            return 0
+        return sklearn.metrics.f1_score(y_true=self.cur_labels, y_pred=self.cur_predictions, average='macro')
+
+    def before_run(self, run_context):
+        return tf.train.SessionRunArgs([self._label_tensor, self._predictions_tensor, self.global_step])
+
+    def after_run(self,
+                  run_context,
+                  run_values):
+        res = run_values.results
+        self.cur_labels = res[0] if self.cur_labels is None else np.concatenate((self.cur_labels, res[0]), axis=0)
+        self.cur_predictions = res[1] if self.cur_predictions is None else np.concatenate((self.cur_predictions,
+                                                                                           res[1]), axis=0)
+        if res[2] % self._reset_every_n_steps == 0:
+            self.cur_predictions = None
+            self.cur_labels = None
 
 
 def train_one_model(args, cur_folds_index):
@@ -243,7 +275,10 @@ def train_one_model(args, cur_folds_index):
     # 构建模型
     ph_is_training = tf.placeholder(tf.bool)
     reconstruct_image, logits, end_points = get_encoder_decoder_model(input_images, args,
-                                                                      is_training=ph_is_training,)
+                                                                      is_training=ph_is_training, )
+
+    reconstruct_image_min = tf.reduce_min(reconstruct_image)
+    reconstruct_image_max = tf.reduce_max(reconstruct_image)
 
     # 训练相关
     total_loss, seperate_loss_summary = get_classifier_and_reconstruction_loss(args,
@@ -322,7 +357,7 @@ def train_one_model(args, cur_folds_index):
                        session_config=config,
                        hooks=hooks,
                        scaffold=scaffold,
-                       logging_tensors=update_metrics,
+                       logging_tensors=update_metrics + [reconstruct_image_min, reconstruct_image_max],
                        logging_every_n_steps=args.logging_every_n_steps,
                        feed_fn=feed_fn,
                        summary_every_n_steps=args.summary_every_n_steps,
@@ -336,8 +371,10 @@ def train(args):
     if args.k_folds == 1:
         train_one_model(args, None)
     else:
-        for i in range(args.k_folds):
-            train_one_model(args, i)
+        cur_index = args.k_folds_index
+        while cur_index < args.k_folds:
+            train_one_model(args, cur_index)
+            cur_index += 1
 
 
 def main(args):
@@ -362,46 +399,45 @@ def _parse_arguments(argv):
     parser.add_argument('--submission_csv_file_name', type=str, default="sample_submission.csv")
     parser.add_argument('--image_height', type=int, default=512)
     parser.add_argument('--image_width', type=int, default=512)
-    parser.add_argument('--model_in_channels', type=int, default=3)
+    parser.add_argument('--model_in_channels', type=int, default=4)
     parser.add_argument('--model_out_channels', type=int, default=1)
 
     # k folds
     parser.add_argument('--k_folds', type=int, default=6)
-    parser.add_argument('--k_folds_index', type=int, default=0)
+    parser.add_argument('--k_folds_index', type=int, default=4)
     parser.add_argument('--k_folds_generate', type=bool, default=False)
 
     # training base configs
-    parser.add_argument('--model', type=str, default='inception_v3')
+    parser.add_argument('--model', type=str, default='inception_resnet_v2')
     parser.add_argument('--loss', type=str, default='ce')
-    parser.add_argument('--with_mse', type=bool, default=False)
+    parser.add_argument('--with_mse', type=bool, default=True)
     parser.add_argument('--val_percent', type=float, default=0.15)
-    parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--epochs', type=int, default=2)
+    parser.add_argument('--batch_size', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--weight_decay', type=float, default=.00001)
     parser.add_argument('--dropout_keep_prob', type=float, default=0.8)
     parser.add_argument('--shuffle_buffer_size', type=int, default=1000)
-    parser.add_argument('--pretrained_model_includes', type=list, default=['InceptionV3'])
-    parser.add_argument('--pretrained_model_excludes', type=list, default=None)
+    parser.add_argument('--pretrained_model_includes', type=list, default=['InceptionResnetV2'])
+    parser.add_argument('--pretrained_model_excludes', type=list, default=['InceptionResnetV2/Conv2d_1a_3x3'])
     parser.add_argument('--pretrained_model_path', type=str,
-                        default='/ssd/zhangyiyang/slim/inception_v3.ckpt')
+                        default='/ssd/zhangyiyang/slim/inception_resnet_v2_2016_08_30.ckpt')
 
     # training steps configs
-    parser.add_argument('--logging_every_n_steps', type=int, default=100)
-    parser.add_argument('--save_every_n_steps', type=int, default=1800)
-    parser.add_argument('--validation_every_n_steps', type=int, default=1800)
-    parser.add_argument('--summary_every_n_steps', type=int, default=100)
+    parser.add_argument('--logging_every_n_steps', type=int, default=500)
+    parser.add_argument('--save_every_n_steps', type=int, default=2500)
+    parser.add_argument('--validation_every_n_steps', type=int, default=2500)
+    parser.add_argument('--summary_every_n_steps', type=int, default=500)
 
     # training learning rate configs
-    parser.add_argument('--learning_rate_start', type=float, default=0.03)
-    parser.add_argument('--learning_rate_decay_steps', type=int, default=18000)
+    parser.add_argument('--learning_rate_start', type=float, default=0.01)
+    parser.add_argument('--learning_rate_decay_steps', type=int, default=2500*15)
     parser.add_argument('--learning_rate_decay_rate', type=float, default=0.1)
     parser.add_argument('--learning_rate_staircase', type=bool, default=True)
 
     # training logs configs
-    parser.add_argument('--logs_dir', type=str, default="./logs-inception-v3-ce-ensemble/", help='')
+    parser.add_argument('--logs_dir', type=str, default="./logs-inception-resnet-v2-ce-mse-ensemble/", help='')
 
     # test configs
-    parser.add_argument('--add_leak_data', type=bool, default=True, help='')
     parser.add_argument('--leak_data_file_path', type=str, default="/ssd/zhangyiyang/protein/leak_data.csv", help='')
 
     return parser.parse_args(argv)
